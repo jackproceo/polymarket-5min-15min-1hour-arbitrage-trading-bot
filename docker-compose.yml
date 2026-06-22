@@ -1,0 +1,91 @@
+version: "3.9"
+
+# =============================================================================
+# Polymarket 3-Bot Suite — Docker Compose
+# =============================================================================
+# Usage:
+#   1. Prepare config files for each bot (see README in each subdirectory)
+#   2. docker compose build
+#   3. docker compose up -d
+#   4. Check logs: docker compose logs -f
+#
+# Data directories (logs, state, analysis) persist via bind mounts
+# to the corresponding subdirectory on the host — e.g.:
+#   ./btc-binary-VWAP-Momentum-bot/logs/  →  /app/logs  (in container)
+#
+# Config files (credentials) are bind-mounted with :ro flag.
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ─── Bot 1: VWAP / Momentum (BTC only) ─────────────────────────────────
+  bot-vwap:
+    container_name: polymarket-bot-vwap
+    build:
+      context: ./btc-binary-VWAP-Momentum-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "24008:8765"   # FastAPI web dashboard
+    volumes:
+      # Credentials (REQUIRED): create from .env.example
+      - ./btc-binary-VWAP-Momentum-bot/.env:/app/.env:ro
+      # Trading config (optional override; baked-in defaults work for simulation)
+      - ./btc-binary-VWAP-Momentum-bot/config.json:/app/config.json:ro
+      # Persist logs, trading history, and simulation data to host directories
+      - ./btc-binary-VWAP-Momentum-bot/logs:/app/logs
+      - ./btc-binary-VWAP-Momentum-bot/data:/app/data
+    logging: *default-logging
+    networks:
+      - polymarket-net
+
+  # ─── Bot 2: Meridian (BTC, ETH, SOL, XRP) ──────────────────────────────
+  bot-meridian:
+    container_name: polymarket-bot-meridian
+    build:
+      context: ./up-down-spread-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "24018:5050"   # Flask web dashboard
+    volumes:
+      # Credentials (REQUIRED): create from .env.example
+      - ./up-down-spread-bot/.env:/app/.env:ro
+      # Trading config (REQUIRED): create from config/config.example.json
+      - ./up-down-spread-bot/config/config.json:/app/config/config.json:ro
+      # Persist trades, orders, and bot state to host logs directory
+      - ./up-down-spread-bot/logs:/app/logs
+    logging: *default-logging
+    networks:
+      - polymarket-net
+
+  # ─── Bot 3: PTB (BTC, PTB diff / probability) ──────────────────────────
+  bot-ptb:
+    container_name: polymarket-bot-ptb
+    build:
+      context: ./5min-15min-PTB-bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "24028:5080"   # Flask dashboard
+    volumes:
+      # Credentials + trading config (REQUIRED): create config.env from config.env.example
+      - ./5min-15min-PTB-bot/config.env:/app/config.env:ro
+      # Persist state and analysis log to host data directory
+      # (create data/ dir with empty state.json + trading_analysis.jsonl before first run)
+      - ./5min-15min-PTB-bot/data/state.json:/app/state.json
+      - ./5min-15min-PTB-bot/data/trading_analysis.jsonl:/app/trading_analysis.jsonl
+    logging: *default-logging
+    networks:
+      - polymarket-net
+
+# ─── Network ──────────────────────────────────────────────────────────────
+networks:
+  polymarket-net:
+    driver: bridge
