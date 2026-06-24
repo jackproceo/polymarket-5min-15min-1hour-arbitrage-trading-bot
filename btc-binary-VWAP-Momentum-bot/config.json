@@ -64,7 +64,7 @@
   "web_dashboard": {
     "_comment": "Open http://127.0.0.1:PORT/ (not https). If the page fails, avoid typing only localhost (IPv6). Use 0.0.0.0 to listen on all IPv4 interfaces.",
     "enabled": true,
-    "host": "127.0.0.1",
+    "host": "0.0.0.0",
     "port": 8765
   },
 

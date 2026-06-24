@@ -3,41 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Meridian — Control &amp; Analytics</title>
+  <title>Meridian — 控制与分析</title>
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
   <div class="layout">
     <header class="header">
       <h1>Meridian</h1>
-      <p class="subtitle" id="header-subtitle">Polymarket desk · live status · settings · analytics</p>
+      <p class="subtitle" id="header-subtitle">Polymarket 控制台 · 实时状态 · 设置 · 分析</p>
       <div class="header-actions">
-        <span id="conn-badge" class="badge badge-warn">connecting…</span>
-        <button type="button" id="btn-refresh" class="btn btn-secondary">Refresh now</button>
-        <button type="button" id="btn-stop" class="btn btn-danger">Request stop</button>
+        <span id="conn-badge" class="badge badge-warn">连接中…</span>
+        <button type="button" id="btn-refresh" class="btn btn-secondary">立即刷新</button>
+        <button type="button" id="btn-stop" class="btn btn-danger">请求停止</button>
       </div>
     </header>
 
     <section class="panel summary" id="panel-summary">
-      <h2>Session</h2>
+      <h2>会话</h2>
       <div class="grid-4" id="summary-stats"></div>
     </section>
 
     <section class="panel">
-      <h2>Markets (live)</h2>
+      <h2>市场 (实时)</h2>
       <div class="coins-grid" id="coins-container"></div>
     </section>
 
     <section class="panel">
-      <h2>Recent closed trades</h2>
+      <h2>最近已平仓交易</h2>
       <div class="table-wrap">
         <table class="data-table" id="recent-trades">
           <thead>
             <tr>
-              <th>Strategy</th>
-              <th>Market</th>
-              <th>PnL</th>
-              <th>Winner</th>
+              <th>策略</th>
+              <th>市场</th>
+              <th>盈亏</th>
+              <th>胜方</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -46,19 +46,19 @@
     </section>
 
     <section class="panel">
-      <h2>Settings <span class="hint">(edit JSON — restart bot to apply)</span></h2>
+      <h2>设置 <span class="hint">(编辑 JSON — 重启机器人生效)</span></h2>
       <div class="settings-row">
         <textarea id="config-editor" spellcheck="false" rows="18"></textarea>
         <div class="settings-actions">
-          <button type="button" id="btn-load-config" class="btn btn-secondary">Reload from disk</button>
-          <button type="button" id="btn-save-config" class="btn btn-primary">Save config.json</button>
+          <button type="button" id="btn-load-config" class="btn btn-secondary">从磁盘重新加载</button>
+          <button type="button" id="btn-save-config" class="btn btn-primary">保存 config.json</button>
         </div>
         <p id="config-message" class="message"></p>
       </div>
     </section>
 
     <footer class="footer">
-      <p>API: <code>/api/status</code>, <code>/api/config</code>, <code>POST /api/bot/stop</code> · Start bot with <code>python main.py --web</code></p>
+      <p>API: <code>/api/status</code>, <code>/api/config</code>, <code>POST /api/bot/stop</code> · 使用 <code>python main.py --web</code> 启动机器人</p>
     </footer>
   </div>
   <script src="/static/app.js"></script>

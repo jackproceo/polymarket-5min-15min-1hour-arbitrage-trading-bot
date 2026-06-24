@@ -21,7 +21,7 @@
       ml = labelFromIntervalSec(data.market_interval_sec);
     }
     const part = ml ? `${ml} ` : "";
-    headerSubtitle.textContent = `Polymarket ${part}desk · live status · settings · analytics`;
+    headerSubtitle.textContent = `Polymarket ${part}控制台 · 实时状态 · 设置 · 分析`;
   }
 
   function updateHeaderSubtitleFromConfig(cfg) {
@@ -33,7 +33,7 @@
       ml = labelFromIntervalSec(pm.market_interval_sec);
     }
     if (ml) {
-      headerSubtitle.textContent = `Polymarket ${ml} desk · live status · settings · analytics`;
+      headerSubtitle.textContent = `Polymarket ${ml} 控制台 · 实时状态 · 设置 · 分析`;
     }
   }
 
@@ -56,13 +56,13 @@
     const p = data.portfolio || {};
     const dry = data.dry_run;
     summaryEl.innerHTML = [
-      card("Uptime", fmtTime(data.uptime_sec)),
-      card("Market", data.market_label || "—"),
-      card("Mode", dry ? "DRY RUN" : "LIVE", dry ? "warn" : "ok"),
-      card("Wallet", data.wallet_balance != null ? "$" + data.wallet_balance.toFixed(2) : "—"),
-      card("Total PnL", fmtUsd(p.total_pnl), (p.total_pnl || 0) >= 0 ? "pos" : "neg"),
-      card("Trades", String(p.total_trades ?? "0")),
-      card("ROI %", (p.portfolio_roi != null ? p.portfolio_roi.toFixed(2) + "%" : "—")),
+      card("运行时间", fmtTime(data.uptime_sec)),
+      card("市场", data.market_label || "—"),
+      card("模式", dry ? "模拟运行" : "实盘", dry ? "warn" : "ok"),
+      card("钱包", data.wallet_balance != null ? "$" + data.wallet_balance.toFixed(2) : "—"),
+      card("总盈亏", fmtUsd(p.total_pnl), (p.total_pnl || 0) >= 0 ? "pos" : "neg"),
+      card("交易数", String(p.total_trades ?? "0")),
+      card("收益率", (p.portfolio_roi != null ? p.portfolio_roi.toFixed(2) + "%" : "—")),
     ].join("");
   }
 
@@ -91,35 +91,35 @@
         const conf = x.confidence != null ? x.confidence.toFixed(3) : "—";
         const slugShort = (x.market_slug || "").split("-").pop() || "—";
         const st = x.stats || {};
-        let posHtml = '<div class="row"><span>Position</span><strong>None</strong></div>';
+        let posHtml = '<div class="row"><span>持仓</span><strong>无</strong></div>';
         if (x.position) {
           const p = x.position;
           posHtml = `
           <div class="pos-block">
-            <div class="row"><span>Unrealized</span><strong class="${p.unrealized_pnl >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(
+            <div class="row"><span>未实现</span><strong class="${p.unrealized_pnl >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(
             p.unrealized_pnl
           )}</strong></div>
-            <div class="row"><span>Invested</span><strong>$${p.total_invested}</strong></div>
-            <div class="row"><span>Side / entries</span><strong>${p.our_side} · ${p.entries_count}</strong></div>
-            <div class="row"><span>If UP wins</span><strong>${fmtUsd(p.if_up_wins)}</strong></div>
-            <div class="row"><span>If DOWN wins</span><strong>${fmtUsd(p.if_down_wins)}</strong></div>
+            <div class="row"><span>已投入</span><strong>$${p.total_invested}</strong></div>
+            <div class="row"><span>方向 / 次数</span><strong>${p.our_side} · ${p.entries_count}</strong></div>
+            <div class="row"><span>UP 胜</span><strong>${fmtUsd(p.if_up_wins)}</strong></div>
+            <div class="row"><span>DOWN 胜</span><strong>${fmtUsd(p.if_down_wins)}</strong></div>
           </div>`;
         }
         return `
         <div class="coin-card">
           <h3>${c.toUpperCase()}
-            ${en ? "" : '<span class="disabled-tag">disabled</span>'}
+            ${en ? "" : '<span class="disabled-tag">已禁用</span>'}
           </h3>
-          <div class="row"><span>Market</span><strong>${escapeHtml(slugShort)}</strong></div>
-          <div class="row"><span>Time left</span><strong>${fmtTime(x.seconds_till_end)}</strong></div>
-          <div class="row"><span>UP / DN ask</span><strong>${x.up_ask?.toFixed(3) ?? "—"} / ${x.down_ask?.toFixed(
+          <div class="row"><span>市场</span><strong>${escapeHtml(slugShort)}</strong></div>
+          <div class="row"><span>剩余时间</span><strong>${fmtTime(x.seconds_till_end)}</strong></div>
+          <div class="row"><span>UP / DN 卖价</span><strong>${x.up_ask?.toFixed(3) ?? "—"} / ${x.down_ask?.toFixed(
             3
           ) ?? "—"}</strong></div>
-          <div class="row"><span>Favorite · Conf</span><strong>${fav} · ${conf}</strong></div>
-          <div class="row"><span>PnL (coin)</span><strong class="${(st.pnl || 0) >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(
+          <div class="row"><span>偏好 · 置信度</span><strong>${fav} · ${conf}</strong></div>
+          <div class="row"><span>盈亏(币)</span><strong class="${(st.pnl || 0) >= 0 ? "pnl-pos" : "pnl-neg"}">${fmtUsd(
             st.pnl
           )}</strong></div>
-          <div class="row"><span>W/L · WR</span><strong>${st.wins ?? 0}/${st.losses ?? 0} · ${st.win_rate ?? 0}%</strong></div>
+          <div class="row"><span>胜/负 · 胜率</span><strong>${st.wins ?? 0}/${st.losses ?? 0} · ${st.win_rate ?? 0}%</strong></div>
           ${posHtml}
         </div>`;
       })
@@ -142,7 +142,7 @@
       })
       .join("");
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4">No closed trades this session yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4">本会话暂无已平仓交易</td></tr>';
     }
   }
 
@@ -161,14 +161,14 @@
       renderRecent(data);
       const health = await fetch("/api/health", { cache: "no-store" }).then((x) => x.json());
       if (health.bot_live) {
-        badge.textContent = "live";
+        badge.textContent = "运行中";
         badge.className = "badge badge-ok";
       } else {
-        badge.textContent = "no live bot";
+        badge.textContent = "机器人未运行";
         badge.className = "badge badge-off";
       }
     } catch (e) {
-      badge.textContent = "disconnected";
+      badge.textContent = "已断开";
       badge.className = "badge badge-warn";
     }
   }
@@ -182,7 +182,7 @@
       if (j.error) throw new Error(j.error);
       configEditor.value = JSON.stringify(j, null, 2);
       updateHeaderSubtitleFromConfig(j);
-      configMsg.textContent = "Loaded.";
+      configMsg.textContent = "已加载。";
       configMsg.className = "message ok";
     } catch (e) {
       configMsg.textContent = String(e.message || e);
@@ -203,7 +203,7 @@
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "save failed");
-      configMsg.textContent = j.message || "Saved.";
+      configMsg.textContent = j.message || "已保存。";
       configMsg.className = "message ok";
     } catch (e) {
       configMsg.textContent = String(e.message || e);
@@ -212,7 +212,7 @@
   });
 
   document.getElementById("btn-stop").addEventListener("click", async () => {
-    if (!confirm("Request graceful stop? The bot will exit (same as Ctrl+C).")) return;
+    if (!confirm("请求正常停止？机器人将退出（等同于 Ctrl+C）。")) return;
     try {
       const r = await fetch("/api/bot/stop", { method: "POST" });
       const j = await r.json();

@@ -23,7 +23,7 @@ _HTML = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>BTC Live Bot</title>
+  <title>BTC 实时机器人</title>
   <style>
     :root {
       --bg: #0d1117; --panel: #161b22; --border: #30363d;
@@ -50,17 +50,17 @@ _HTML = """<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <h1>BTC up/down — live</h1>
-  <div class="meta" id="meta">Loading…</div>
+  <h1>BTC 涨跌 — 实时</h1>
+  <div class="meta" id="meta">加载中…</div>
   <div class="grid">
-    <div class="card"><h2>Session</h2><div id="session" class="mono"></div></div>
-    <div class="card"><h2>Strategy</h2><div id="strategy"></div></div>
+    <div class="card"><h2>会话</h2><div id="session" class="mono"></div></div>
+    <div class="card"><h2>策略</h2><div id="strategy"></div></div>
     <div class="card"><h2>UP</h2><div id="up" class="mono"></div></div>
     <div class="card"><h2>DOWN</h2><div id="down" class="mono"></div></div>
     <div class="card btc"><h2>BTC / USD (Chainlink)</h2><div id="btc" class="mono"></div></div>
-    <div class="card"><h2>Trading</h2><div id="trading" class="mono"></div></div>
+    <div class="card"><h2>交易</h2><div id="trading" class="mono"></div></div>
   </div>
-  <footer>Refreshes every second · <span id="err"></span></footer>
+  <footer>每秒刷新 · <span id="err"></span></footer>
   <script>
     /* No optional chaining (?.) — must run in older browsers / Edge legacy. */
     function esc(s) {
@@ -96,9 +96,9 @@ _HTML = """<!DOCTYPE html>
           if (d.ts) ts = new Date(d.ts * 1000).toISOString();
           document.getElementById("meta").innerHTML = esc(slug) + " \u00b7 " + esc(ts);
           document.getElementById("session").innerHTML = [
-            "Timer: " + (hdr.time_left_sec != null ? esc(Math.floor(hdr.time_left_sec) + "s left") : "\u2014"),
-            "WS: " + (hdr.ws_connected ? "live" : "disconnected"),
-            "Mode: " + (hdr.simulation ? "simulation" : "real"),
+            "计时器: " + (hdr.time_left_sec != null ? esc(Math.floor(hdr.time_left_sec) + "秒剩余") : "\u2014"),
+            "WS: " + (hdr.ws_connected ? "已连接" : "已断开"),
+            "模式: " + (hdr.simulation ? "模拟" : "实盘"),
           ].join("<br/>");
           var st = d.strategy || {};
           var sig = st.signal_text || "\u2014";
@@ -107,23 +107,23 @@ _HTML = """<!DOCTYPE html>
           document.getElementById("strategy").innerHTML =
             '<div class="sig ' + sigClass(sig) + '">' + esc(sig) + "</div>" +
             '<div class="mono" style="margin-top:0.4rem">' +
-            "Fav: " + esc(st.favorite) + " \u00b7 WR: " + esc(st.win_rate_str) + "<br/>" +
-            "Checks: P=" + chk(ck.price) + " T=" + chk(ck.time) + " D=" + chk(ck.dev) +
-            " M=" + chk(ck.mom) + " cutoff=" + chk(ck.time_cutoff) +
+            "偏好: " + esc(st.favorite) + " \u00b7 胜率: " + esc(st.win_rate_str) + "<br/>" +
+            "检查: P=" + chk(ck.price) + " T=" + chk(ck.time) + " D=" + chk(ck.dev) +
+            " M=" + chk(ck.mom) + " 截止=" + chk(ck.time_cutoff) +
             "</div>";
           function book(x, id) {
             var el = document.getElementById(id);
-            if (!x) { el.textContent = "No data"; return; }
+            if (!x) { el.textContent = "无数据"; return; }
             var bk = x.book || {};
             var ind = x.indicators || {};
             el.innerHTML = [
-              "Last " + esc(bk.last_price),
-              "Bid " + esc(bk.best_bid) + " / Ask " + esc(bk.best_ask),
+              "最新 " + esc(bk.last_price),
+              "买价 " + esc(bk.best_bid) + " / 卖价 " + esc(bk.best_ask),
               "VWAP " + numFmt(ind.vwap, 4) +
-                " \u00b7 Dev " + (ind.deviation_pct != null ? numFmt(ind.deviation_pct, 2) + "%" : "\u2014"),
+                " \u00b7 偏差 " + (ind.deviation_pct != null ? numFmt(ind.deviation_pct, 2) + "%" : "\u2014"),
               "Z " + numFmt(ind.zscore, 2) +
-                " \u00b7 Mom " + (ind.momentum_pct != null ? numFmt(ind.momentum_pct, 2) + "%" : "\u2014"),
-              "Vol " + (bk.volume_total != null ? esc(Math.round(bk.volume_total)) : "\u2014"),
+                " \u00b7 动量 " + (ind.momentum_pct != null ? numFmt(ind.momentum_pct, 2) + "%" : "\u2014"),
+              "成交量 " + (bk.volume_total != null ? esc(Math.round(bk.volume_total)) : "\u2014"),
             ].join("<br/>");
           }
           book(d.up, "up");
@@ -133,39 +133,39 @@ _HTML = """<!DOCTYPE html>
           if (b.btc_current_price > 0) {
             btcEl.innerHTML = [
               "$" + esc(numFmt(b.btc_current_price, 2)),
-              "Anchor $" + (b.btc_anchor_price > 0 ? esc(numFmt(b.btc_anchor_price, 2)) : "\u2014"),
+              "锚定 $" + (b.btc_anchor_price > 0 ? esc(numFmt(b.btc_anchor_price, 2)) : "\u2014"),
               esc(b.deviation_line || ""),
-              "Feed: " + (b.btc_connected ? "ok" : "off") +
+              "数据源: " + (b.btc_connected ? "正常" : "离线") +
                 (b.fresh_sec != null ? " \u00b7 " + Math.floor(b.fresh_sec) + "s" : ""),
             ].join("<br/>");
           } else {
-            btcEl.textContent = "Waiting for Chainlink\u2026";
+            btcEl.textContent = "等待 Chainlink 数据…";
           }
           var tr = d.trading || {};
-          var tHtml = "Markets " + esc(tr.markets_seen) + " \u00b7 Trades " + esc(tr.trade_count) +
-            " \u00b7 PnL $" + (tr.total_pnl != null ? numFmt(tr.total_pnl, 2) : "\u2014") + "<br/>";
+          var tHtml = "市场数 " + esc(tr.markets_seen) + " \u00b7 交易数 " + esc(tr.trade_count) +
+            " \u00b7 盈亏 $" + (tr.total_pnl != null ? numFmt(tr.total_pnl, 2) : "\u2014") + "<br/>";
           if (tr.position) {
             var p = tr.position;
-            tHtml += "LONG " + esc(p.token_name) + " @ " + esc(p.entry_price) +
-              " \u00d7" + esc(p.contracts) + (p.hedged ? " hedged" : "") + "<br/>";
-            tHtml += "Unreal $" + (p.unrealized_pnl != null ? numFmt(p.unrealized_pnl, 2) : "\u2014") + "<br/>";
+            tHtml += "做多 " + esc(p.token_name) + " @ " + esc(p.entry_price) +
+              " \u00d7" + esc(p.contracts) + (p.hedged ? " 已对冲" : "") + "<br/>";
+            tHtml += "未实现 $" + (p.unrealized_pnl != null ? numFmt(p.unrealized_pnl, 2) : "\u2014") + "<br/>";
           } else {
-            tHtml += "No open position<br/>";
+            tHtml += "无持仓<br/>";
           }
           if (tr.recent_trades && tr.recent_trades.length) {
             var lines = [];
             for (var i = 0; i < tr.recent_trades.length; i++) {
               lines.push(esc(tr.recent_trades[i].line));
             }
-            tHtml += "<br/>Recent:<br/>" + lines.join("<br/>");
+            tHtml += "<br/>最近:<br/>" + lines.join("<br/>");
           }
           document.getElementById("trading").innerHTML = tHtml;
         } catch (e) {
-          errEl.textContent = "Poll error: " + (e && e.message ? e.message : e);
+          errEl.textContent = "轮询错误: " + (e && e.message ? e.message : e);
         }
       };
       r.onerror = function () {
-        errEl.textContent = "Network error (is the bot running?)";
+        errEl.textContent = "网络错误（机器人是否在运行？）";
       };
       r.send();
     }
