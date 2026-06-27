@@ -74,6 +74,8 @@ services:
     restart: unless-stopped
     ports:
       - "24028:5080"   # Flask dashboard
+    environment:
+      - TZ=Asia/Shanghai
     volumes:
       # Credentials + trading config (REQUIRED): create config.env from config.env.example
       - ./5min-15min-PTB-bot/config.env:/app/config.env:ro

@@ -122,6 +122,7 @@ RELAYER_URL = os.getenv("RELAYER_URL", "https://relayer-v2.polymarket.com")
 RELAYER_TX_TYPE = os.getenv("RELAYER_TX_TYPE", "SAFE").upper()
 
 # ============== 仪表盘 ==============
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "okok")
 DASHBOARD_ACCOUNT_SYNC_SEC = max(10, int(os.getenv("DASHBOARD_ACCOUNT_SYNC_SEC", "20")))
 MARKET_FOUND_LOG_INTERVAL = max(10, int(os.getenv("MARKET_FOUND_LOG_INTERVAL", "30")))
 MARKET_META_REFRESH_SEC = max(2, int(os.getenv("MARKET_META_REFRESH_SEC", "5")))

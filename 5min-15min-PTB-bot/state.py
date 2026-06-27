@@ -4,7 +4,7 @@ Polymarket BTC 5分钟/15分钟 涨跌自动交易 - 全局状态模块
 运行时数据、仪表盘状态、Flask应用示例。
 """
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import Flask
 

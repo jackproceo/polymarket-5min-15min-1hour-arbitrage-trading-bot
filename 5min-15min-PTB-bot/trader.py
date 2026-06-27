@@ -36,20 +36,20 @@ class Trader:
         """连接py-clob客户端。"""
         pk = os.getenv("PRIVATE_KEY")
         if not pk:
-            log("PRIVATE_KEY not set", "ERR")
+            log("PRIVATE_KEY 未设置", "ERR")
             return False
 
         try:
             if not pk.startswith("0x"):
                 pk = "0x" + pk
 
-            log("Connecting CLOB client...")
+            log("正在连接 CLOB 客户端...")
             from py_clob_client.client import ClobClient
             from py_clob_client.clob_types import OrderArgs
             from py_clob_client.order_builder.constants import BUY, SELL
             temp = ClobClient(host="https://clob.polymarket.com", chain_id=137, key=pk)
             self.address = temp.get_address()
-            log(f"Wallet: {self.address}")
+            log(f"钱包地址: {self.address}")
 
             creds = temp.create_or_derive_api_creds()
             funder = os.getenv("FUNDER_ADDRESS") or self.address
@@ -64,22 +64,22 @@ class Trader:
                 funder=funder
             )
             self.connected = True
-            log("CLOB client connected", "OK")
+            log("CLOB 客户端已连接", "OK")
             return True
         except Exception as e:
-            log(f"Connect failed: {e}", "ERR")
+            log(f"连接失败: {e}", "ERR")
             return False
 
     def place_order(self, token_id, side, price, size):
         """下限价单。"""
         if not self.connected:
-            log("CLOB client not connected", "ERR")
+            log("CLOB 客户端未连接", "ERR")
             return None
 
         try:
             from py_clob_client.clob_types import OrderArgs
             from py_clob_client.order_builder.constants import BUY, SELL
-            log(f"Order: {side} ${size} @ {price:.3f}", "TRADE")
+            log(f"下单: {side} ${size} @ {price:.3f}", "TRADE")
 
             order_args = OrderArgs(
                 token_id=token_id,
@@ -93,13 +93,13 @@ class Trader:
 
             if resp and resp.get("orderID"):
                 order_id = resp.get("orderID")
-                log(f"Order placed, id: {order_id}", "OK")
+                log(f"订单已提交，ID: {order_id}", "OK")
                 return order_id
             else:
-                log("Order rejected", "ERR")
+                log("订单被拒绝", "ERR")
                 return None
         except Exception as e:
-            log(f"Order error: {e}", "ERR")
+            log(f"下单错误: {e}", "ERR")
             return None
 
     def get_order_status(self, order_id):
@@ -121,7 +121,7 @@ class Trader:
                     "filled": size_matched >= original_size if original_size > 0 else False
                 }
         except Exception as e:
-            log(f"get_order failed: {e}", "WARN")
+            log(f"查询订单失败: {e}", "WARN")
         return None
 
     def cancel_order(self, order_id):
@@ -130,16 +130,16 @@ class Trader:
             return False
 
         try:
-            log(f"Cancel order: {order_id}", "WARN")
+            log(f"取消订单: {order_id}", "WARN")
             resp = self.client.cancel(order_id)
             if resp:
-                log("Order canceled", "OK")
+                log("订单已取消", "OK")
                 return True
             else:
-                log("Cancel failed", "ERR")
+                log("取消失败", "ERR")
                 return False
         except Exception as e:
-            log(f"Cancel error: {e}", "ERR")
+            log(f"取消错误: {e}", "ERR")
             return False
 
 
@@ -167,22 +167,22 @@ class AutoRedeemer:
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": ""})
             return
         if not HAS_WEB3 or not Web3:
-            log("Auto-redeem disabled: web3 not installed", "WARN", force=True)
+            log("自动赎回已禁用：未安装 web3", "WARN", force=True)
             self.enabled = False
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": "web3 missing"})
             return
         if not self.private_key:
-            log("Auto-redeem disabled: PRIVATE_KEY missing", "WARN", force=True)
+            log("自动赎回已禁用：PRIVATE_KEY 缺失", "WARN", force=True)
             self.enabled = False
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": "PRIVATE_KEY missing"})
             return
         if not self.funder_address:
-            log("Auto-redeem disabled: FUNDER_ADDRESS missing (proxy wallet)", "WARN", force=True)
+            log("自动赎回已禁用：FUNDER_ADDRESS 缺失（代理钱包）", "WARN", force=True)
             self.enabled = False
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": "FUNDER_ADDRESS missing"})
             return
         if not (POLY_BUILDER_API_KEY and POLY_BUILDER_SECRET and POLY_BUILDER_PASSPHRASE):
-            log("Auto-redeem disabled: POLY_BUILDER_API_KEY/SECRET/PASSPHRASE missing", "WARN", force=True)
+            log("自动赎回已禁用：POLY_BUILDER_API_KEY/SECRET/PASSPHRASE 缺失", "WARN", force=True)
             self.enabled = False
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": "Builder API creds missing"})
             return
@@ -191,7 +191,7 @@ class AutoRedeemer:
 
         client, err = self._create_relayer_client()
         if client is None:
-            log(f"Auto-redeem disabled: relayer init failed {err}", "ERR", force=True)
+            log(f"自动赎回已禁用：中继器初始化失败 {err}", "ERR", force=True)
             self.enabled = False
             _dashboard_set(auto_redeem={"enabled": False, "pending_count": 0, "claimable_count": 0, "last_result": {}, "last_error": str(err)})
             return
@@ -391,7 +391,7 @@ class AutoRedeemer:
                 owner_text = ", ".join(owners[:3])
                 if len(owners) > 3:
                     owner_text += f" +{len(owners) - 3} more"
-                log(f"Redeemable pending: {len(pending)}, relayer-claimable: {len(claimable)}, owners: {owner_text}", "WARN", force=True)
+                log(f"可赎回待处理: {len(pending)}, 中继器可领取: {len(claimable)}, 拥有者: {owner_text}", "WARN", force=True)
 
         if not claimable:
             return
@@ -405,7 +405,7 @@ class AutoRedeemer:
 
             ok, tx_hash, err = self._redeem_condition(cid)
             if ok:
-                log(f"Relayer redeem ok: {cid} | tx {tx_hash}", "TRADE", force=True)
+                log(f"中继器兑换成功: {cid} | 交易 {tx_hash}", "TRADE", force=True)
                 self.last_error = ""
                 self.last_result = {
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -415,7 +415,7 @@ class AutoRedeemer:
                     "message": "ok",
                 }
             else:
-                log(f"Relayer redeem failed: {cid} | {err}", "ERR", force=True)
+                log(f"中继器兑换失败: {cid} | {err}", "ERR", force=True)
                 self.last_error = str(err)
                 self.last_result = {
                     "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -444,7 +444,7 @@ class AutoRedeemer:
             try:
                 self.scan_once()
             except Exception as e:
-                log(f"Auto-redeem scan error: {e}", "ERR", force=True)
+                log(f"自动赎回扫描错误: {e}", "ERR", force=True)
             for _ in range(REDEEM_SCAN_INTERVAL):
                 if not self.running:
                     break
@@ -458,7 +458,7 @@ class AutoRedeemer:
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
-        log(f"Auto-redeem on: scan every {REDEEM_SCAN_INTERVAL}s", "OK", force=True)
+        log(f"自动赎回已启动：每 {REDEEM_SCAN_INTERVAL}s 扫描一次", "OK", force=True)
         _dashboard_set(auto_redeem={
             "enabled": self.enabled,
             "pending_count": self.last_pending_count,

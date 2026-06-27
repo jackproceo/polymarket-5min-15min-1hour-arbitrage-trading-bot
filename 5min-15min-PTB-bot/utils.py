@@ -9,7 +9,7 @@ import time
 import json
 import threading
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 from urllib.parse import urlencode
 
 from config import (
@@ -300,8 +300,8 @@ def set_btc_market_minutes(m):
     _trigger_market_refresh()
     _dashboard_set(btc_market_minutes=_btc_market_minutes)
     log(
-        f"BTC market interval set to {_btc_market_minutes}m "
-        f"(slug btc-updown-{_btc_market_minutes}m-*, PTB via {CRYPTO_PRICE_PTB_VARIANT!r} + event window)",
+        f"BTC 市场窗口设为 {_btc_market_minutes}m "
+        f"(slug btc-updown-{_btc_market_minutes}m-*, PTB 通过 {CRYPTO_PRICE_PTB_VARIANT!r} + 事件窗口)",
         "OK",
         force=True,
     )
@@ -469,20 +469,20 @@ def get_crypto_price_api(start_time, end_time):
             "Referer": "https://polymarket.com/"
         }
 
-        log(f"PTB request: {CRYPTO_PRICE_API}?{urlencode(params)}", "INFO")
+        log(f"PTB 请求: {CRYPTO_PRICE_API}?{urlencode(params)}", "INFO")
         r = requests.get(CRYPTO_PRICE_API, params=params, headers=headers,
                         proxies=PROXIES if PROXIES else None, timeout=10)
 
-        log(f"PTB HTTP status: {r.status_code}", "INFO")
+        log(f"PTB HTTP 状态: {r.status_code}", "INFO")
 
         if r.status_code == 200:
             data = r.json()
-            log(f"PTB payload: {data}", "INFO")
+            log(f"PTB 返回数据: {data}", "INFO")
             return data
         else:
-            log(f"PTB request failed: HTTP {r.status_code} - {r.text[:200]}", "ERR")
+            log(f"PTB 请求失败: HTTP {r.status_code} - {r.text[:200]}", "ERR")
     except Exception as e:
-        log(f"crypto-price error: {type(e).__name__}: {str(e)}", "ERR")
+        log(f"价格数据错误: {type(e).__name__}: {str(e)}", "ERR")
     return {}
 
 
@@ -549,10 +549,10 @@ def get_active_market():
             _log_market_found_throttled("next", next_slug, market["remaining"])
             return market
 
-        log("No active market in current or next window", "WARN")
+        log("当前或下一窗口无活跃市场", "WARN")
 
     except Exception as e:
-        log(f"Market fetch failed: {e}", "ERR")
+        log(f"市场获取失败: {e}", "ERR")
         import traceback
         traceback.print_exc()
     return None
@@ -605,7 +605,7 @@ def fetch_market_by_slug(slug):
         if not end_str or not start_str:
             return None
 
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now().timestamp()
         end_ts = datetime.fromisoformat(end_str.replace("Z", "+00:00")).timestamp()
         remaining_time = int(end_ts - now)
 
@@ -855,8 +855,8 @@ def _emit_trading_analysis(event, **fields):
     -------
     JSON Lines（每行一个完整 JSON 对象），追加写入。
     """
-    ts = fields.get("time") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    ts = fields.get("time") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    ts = fields.get("time") or datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+    ts = fields.get("time") or datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
 
     btc = fields.get("btc_price")
     if btc is None:
@@ -971,7 +971,7 @@ def _emit_trading_analysis(event, **fields):
                 f.write(json.dumps(row, default=str, ensure_ascii=False) + "\n")
     except Exception as e:
         try:
-            log(f"Trading analysis log write failed ({TRADING_ANALYSIS_LOG}): {e}", "ERR", force=True)
+            log(f"交易分析日志写入失败 ({TRADING_ANALYSIS_LOG}): {e}", "ERR", force=True)
         except Exception:
             print(f"Trading analysis log write failed ({TRADING_ANALYSIS_LOG}): {e}", file=sys.stderr)
 
@@ -1010,7 +1010,7 @@ def _init_trading_analysis_session():
         "trade_amount_usdc": TRADE_AMOUNT,
         "note": "Trade rows use the same keys as SESSION_START; pnl_total_usd is cumulative realized.",
     }
-    row["logged_at"] = row["time"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    row["logged_at"] = row["time"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
     try:
         log_dir = os.path.dirname(TRADING_ANALYSIS_LOG)
         if log_dir:
@@ -1021,7 +1021,7 @@ def _init_trading_analysis_session():
     except Exception as e:
         print(f"FATAL: cannot write trading log at {TRADING_ANALYSIS_LOG}: {e}", file=sys.stderr)
         try:
-            log(f"Cannot init trading analysis log: {e}", "ERR", force=True)
+            log(f"无法初始化交易分析日志: {e}", "ERR", force=True)
         except Exception:
             pass
 
@@ -1959,4 +1959,4 @@ def save_state(state):
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
     except Exception as e:
-        log(f"save_state failed: {e}", "ERR")
+        log(f"保存状态失败: {e}", "ERR")

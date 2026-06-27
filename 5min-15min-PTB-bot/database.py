@@ -9,7 +9,7 @@ Polymarket BTC 自动交易 — SQLite 数据库模块
 import sqlite3
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 # 数据库文件路径（相对于项目根目录 data/ 文件夹）
 DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -191,7 +191,7 @@ def insert_trade(
     每次开仓（BUY）或平仓（SELL）时调用。
     SELL 操作请使用 insert_trade_close() 或手动传入 exit_price/pnl。
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
     with _write_lock:
         conn = _get_conn()
         conn.execute(
@@ -409,8 +409,8 @@ def insert_account_snapshot(
     simulation : bool
         是否模拟模式。
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with _write_lock:
         conn = _get_conn()
         conn.execute(

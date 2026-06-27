@@ -7,7 +7,7 @@ import os
 import time
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 
 from config import (
     BASE_DIR, _btc_market_minutes, _market_interval_sec,
@@ -45,7 +45,7 @@ from database import init_db, insert_trade, insert_trade_close, insert_account_s
 def main():
     start_web_server()
     if WEB_ENABLED:
-        log(f"Dashboard: http://{WEB_HOST}:{WEB_PORT}", "OK", force=True)
+        log(f"仪表盘: http://{WEB_HOST}:{WEB_PORT}", "OK", force=True)
 
     print("\n" + "="*60)
     print(f"  Polymarket BTC {_btc_market_minutes}m auto-trader")
@@ -56,7 +56,7 @@ def main():
     print(f"  Trading analysis log: {TRADING_ANALYSIS_LOG}")
     print(f"  Auto redeem: {'on' if AUTO_REDEEM else 'off'}")
     _init_trading_analysis_session()
-    log(f"Trading analysis log ready (append-only): {TRADING_ANALYSIS_LOG}", "OK", force=True)
+    log(f"交易分析日志就绪（追加模式）: {TRADING_ANALYSIS_LOG}", "OK", force=True)
     print(f"  Order size: ${TRADE_AMOUNT}")
     print(f"  Rule 1: time\u2264{C1_TIME}s and diff\u2265${C1_DIFF} (UP prob {C1_MIN_PROB*100:.0f}-{C1_MAX_PROB*100:.0f}%)")
     print(f"  Rule 2: time\u2264{C2_TIME}s and diff\u2264-${C2_DIFF} (DOWN prob {C2_MIN_PROB*100:.0f}-{C2_MAX_PROB*100:.0f}%)")
@@ -76,10 +76,10 @@ def main():
     trader = Trader()
     redeemer = AutoRedeemer(os.getenv("PRIVATE_KEY"), os.getenv("FUNDER_ADDRESS"))
     if SIMULATION_MODE:
-        log("SIMULATION_MODE: paper trading — instant fills, no CLOB orders", "OK", force=True)
+        log("模拟模式：纸面交易 — 即时成交，不下真实订单", "OK", force=True)
     elif AUTO_TRADE:
         if not trader.connect():
-            log("Cannot connect CLOB client, exiting", "ERR", force=True)
+            log("无法连接 CLOB 客户端，退出", "ERR", force=True)
             return
     redeemer.start()
 
@@ -101,7 +101,7 @@ def main():
         simulation_mode=SIMULATION_MODE,
     )
 
-    log("Starting price feeds...", "INFO", force=True)
+    log("正在启动价格数据源...", "INFO", force=True)
 
     last_slug = None
     market_listener = None
@@ -213,7 +213,7 @@ def main():
                     price_data["ptb"] = crypto_data["openPrice"]
                 elif crypto_data.get("closePrice"):
                     price_data["ptb"] = crypto_data["closePrice"]
-                    log(f"Using prior window closePrice as PTB: {price_data['ptb']}", "INFO")
+                    log(f"使用上一窗口收盘价作为 PTB: {price_data['ptb']}", "INFO")
 
             btc = _to_float(price_data.get("btc"), 0.0)
             ptb = _to_float(price_data.get("ptb"), 0.0)
@@ -316,7 +316,7 @@ def main():
                     desired_side = "UP"
                     condition = f"R1: time\u2264{C1_TIME}s & diff\u2265${C1_DIFF} (UP {prob*100:.0f}%)"
                 else:
-                    log(f"R1 skip: UP prob {prob*100:.1f}% not in {C1_MIN_PROB*100:.0f}-{C1_MAX_PROB*100:.0f}%", "INFO")
+                    log(f"条件1 跳过：上涨概率 {prob*100:.1f}% 不在 {C1_MIN_PROB*100:.0f}-{C1_MAX_PROB*100:.0f}% 范围", "INFO")
 
             elif remaining <= C2_TIME and diff <= -C2_DIFF:
                 prob = down_entry_price
@@ -325,7 +325,7 @@ def main():
                     desired_side = "DOWN"
                     condition = f"R2: time\u2264{C2_TIME}s & diff\u2264-${C2_DIFF} (DOWN {prob*100:.0f}%)"
                 else:
-                    log(f"R2 skip: DOWN prob {prob*100:.1f}% not in {C2_MIN_PROB*100:.0f}-{C2_MAX_PROB*100:.0f}%", "INFO")
+                    log(f"条件2 跳过：下跌概率 {prob*100:.1f}% 不在 {C2_MIN_PROB*100:.0f}-{C2_MAX_PROB*100:.0f}% 范围", "INFO")
 
             elif remaining <= C3_TIME and diff >= C3_DIFF:
                 prob = up_entry_price
@@ -334,7 +334,7 @@ def main():
                     desired_side = "UP"
                     condition = f"R3: time\u2264{C3_TIME}s & diff\u2265${C3_DIFF} (UP {prob*100:.0f}%)"
                 else:
-                    log(f"R3 skip: UP prob {prob*100:.1f}% not in {C3_MIN_PROB*100:.0f}-{C3_MAX_PROB*100:.0f}%", "INFO")
+                    log(f"条件3 跳过：上涨概率 {prob*100:.1f}% 不在 {C3_MIN_PROB*100:.0f}-{C3_MAX_PROB*100:.0f}% 范围", "INFO")
 
             elif remaining <= C4_TIME and diff <= -C4_DIFF:
                 prob = down_entry_price
@@ -343,7 +343,7 @@ def main():
                     desired_side = "DOWN"
                     condition = f"R4: time\u2264{C4_TIME}s & diff\u2264-${C4_DIFF} (DOWN {prob*100:.0f}%)"
                 else:
-                    log(f"R4 skip: DOWN prob {prob*100:.1f}% not in {C4_MIN_PROB*100:.0f}-{C4_MAX_PROB*100:.0f}%", "INFO")
+                    log(f"条件4 跳过：下跌概率 {prob*100:.1f}% 不在 {C4_MIN_PROB*100:.0f}-{C4_MAX_PROB*100:.0f}% 范围", "INFO")
 
             if triggered:
                 side = desired_side or ("UP" if diff > 0 else "DOWN")
@@ -359,8 +359,7 @@ def main():
                     condition = None
                 elif side_age > MARKET_DATA_MAX_LAG_SEC or btc_age > MARKET_DATA_MAX_LAG_SEC:
                     if now - last_stale_log_ts >= 2:
-                        log(
-                            f"Stale data skip: {side} book age {side_age:.2f}s, BTC age {btc_age:.2f}s (max {MARKET_DATA_MAX_LAG_SEC:.1f}s)",
+                        log(f"陈旧数据跳过：{side} 订单簿年龄 {side_age:.2f}s，BTC 年龄 {btc_age:.2f}s（上限 {MARKET_DATA_MAX_LAG_SEC:.1f}s）",
                             "WARN",
                         )
                         last_stale_log_ts = now
@@ -386,7 +385,7 @@ def main():
                         if elapsed > ORDER_TIMEOUT_SEC:
                             order_status = trader.get_order_status(order_id)
                             if order_status and not order_status.get("filled"):
-                                log(f"Order timeout, cancel & retry (id {order_id})", "TRADE")
+                                log(f"订单超时，取消并重试（ID {order_id}）", "TRADE")
                                 trader.cancel_order(order_id)
                                 state.pop("pending_order", None)
                                 save_state(state)
@@ -414,7 +413,7 @@ def main():
                                 filled_side = pending_order.get("side") or side
                                 filled_price = float(pending_order.get("price") or price or 0)
                                 filled_slug = pending_order.get("slug") or slug
-                                log(f"Filled {filled_side} @ {filled_price*100:.2f}% ({filled_slug})", "TRADE")
+                                log(f"已成交 {filled_side} @ {filled_price*100:.2f}%（{filled_slug}）", "TRADE")
                                 state.pop("pending_order", None)
                                 filled_size = float(order_status.get("size_matched") or order_status.get("original_size") or TRADE_AMOUNT)
                                 state["position"] = {
@@ -502,7 +501,7 @@ def main():
                         retry_cap_price = min(0.995, last_price + BUY_RETRY_STEP)
                         if price > retry_cap_price:
                             log(
-                                f"Chase cap: {price*100:.2f}% > last {last_price*100:.2f}%+{BUY_RETRY_STEP*100:.2f}%, use {retry_cap_price*100:.2f}%",
+                                f"追价上限：{price*100:.2f}% > 上次 {last_price*100:.2f}%+{BUY_RETRY_STEP*100:.2f}%，使用 {retry_cap_price*100:.2f}%",
                                 "INFO",
                             )
                         price = min(price, retry_cap_price)
@@ -511,23 +510,23 @@ def main():
                     if price > 0:
                         slippage = abs(current_price - price) / price
                         if slippage > SLIPPAGE_THRESHOLD:
-                            log(f"Slippage too high: {slippage*100:.1f}% > {SLIPPAGE_THRESHOLD*100:.0f}%, skip", "WARN")
+                            log(f"滑点过高：{slippage*100:.1f}% > {SLIPPAGE_THRESHOLD*100:.0f}%，跳过", "WARN")
                             triggered = False
                             condition = None
 
                     if triggered:
                         if same_key_retry and retry_count >= MAX_RETRY_PER_MARKET:
-                            log(f"Max retries ({MAX_RETRY_PER_MARKET}) for {order_key}", "WARN")
+                            log(f"最大重试次数（{MAX_RETRY_PER_MARKET}）已达，跳过 {order_key}", "WARN")
                             triggered = False
                             condition = None
 
                     if triggered:
-                        log(f"Trigger: {condition} -> {side} @ {price*100:.1f}%", "TRADE")
+                        log(f"触发: {condition} -> {side} @ {price*100:.1f}%", "TRADE")
 
                     if SIMULATION_MODE:
                         sim_shares = _shares_from_usdc_buy(TRADE_AMOUNT, price)
                         if sim_shares <= 0:
-                            log(f"[SIM] Buy skipped: invalid price {price}", "WARN")
+                            log(f"[模拟] 买入跳过：无效价格 {price}", "WARN")
                         else:
                             sim_oid = f"SIM-{int(time.time() * 1000)}"
                             state.pop("pending_order", None)
@@ -679,9 +678,9 @@ def main():
                                 cumulative_realized_pnl=cum,
                             )
                             _sync_dashboard_account_snapshot(dashboard_user)
-                            log(f"Order submitted, watching id {order_id}", "TRADE")
+                            log(f"订单已提交，监控中 ID {order_id}", "TRADE")
                         else:
-                            log(f"Order failed: {side} @ {price*100:.1f}%", "ERR")
+                            log(f"订单失败：{side} @ {price*100:.1f}%", "ERR")
                             current_retry = retry_count if same_key_retry else 0
                             state["last_order"] = {
                                 "key": order_key,
@@ -733,7 +732,7 @@ def main():
                             )
                             _sync_dashboard_account_snapshot(dashboard_user)
                     elif not SIMULATION_MODE:
-                        log(f"Alert: consider BUY {side} @ {price*100:.1f}%", "TRADE")
+                        log(f"提醒：考虑买入 {side} @ {price*100:.1f}%", "TRADE")
                         current_retry = retry_count if same_key_retry else 0
                         state["last_order"] = {
                             "key": order_key,
@@ -872,7 +871,7 @@ def main():
                             cumulative_realized_pnl=cum,
                         )
                         log(
-                            f"[SIM] Stop-loss {pos_side} @ {xp*100:.2f}% | PnL ${realized:+.4f} | cumulative ${cum:+.4f}",
+                            f"[模拟] 止损 {pos_side} @ {xp*100:.2f}% | 盈亏 ${realized:+.4f} | 累计 ${cum:+.4f}",
                             "TRADE",
                         )
                         sim_exit = True
@@ -962,7 +961,7 @@ def main():
                             cumulative_realized_pnl=cum,
                         )
                         log(
-                            f"[SIM] Take-profit {pos_side} @ {xp*100:.2f}% | PnL ${realized:+.4f} | cumulative ${cum:+.4f}",
+                            f"[模拟] 止盈 {pos_side} @ {xp*100:.2f}% | 盈亏 ${realized:+.4f} | 累计 ${cum:+.4f}",
                             "TRADE",
                         )
                         sim_exit = True
@@ -1063,11 +1062,11 @@ def main():
                             cumulative_realized_pnl=cum,
                         )
                         _sync_dashboard_account_snapshot(dashboard_user)
-                        log(f"TP order filled: {pos_side} @ {tp_price*100:.2f}%", "TRADE")
+                        log(f"止盈单已成交：{pos_side} @ {tp_price*100:.2f}%", "TRADE")
                         pos = None
                         tp_order = {}
                     elif tp_status and tp_status.get("status") in ["CANCELED", "CANCELLED", "REJECTED", "EXPIRED"]:
-                        log("TP order dead; will re-arm if price moves", "WARN")
+                        log("止盈单失效，价格波动后将重新挂单", "WARN")
                         state.pop("take_profit_order", None)
                         save_state(state)
                         _dashboard_set(pending_order=_dashboard_pending_order_from_state(state))
@@ -1082,7 +1081,7 @@ def main():
                     and current_prob >= tp_trigger_prob
                 ):
                     log(
-                        f"TP arm: entry {entry_prob*100:.1f}%, now {current_prob*100:.1f}%, target {tp_trigger_prob*100:.1f}% (RR\u2248{TAKE_PROFIT_RR:.2f})",
+                        f"止盈触发：入场 {entry_prob*100:.1f}%，当前 {current_prob*100:.1f}%，目标 {tp_trigger_prob*100:.1f}%（RR≈{TAKE_PROFIT_RR:.2f}）",
                         "TRADE",
                     )
                     if AUTO_TRADE and trader.connected:
@@ -1101,7 +1100,7 @@ def main():
                             if next_price <= attempt_price + 1e-9:
                                 break
                             log(
-                                f"TP retry {attempt_idx+2}/{TAKE_PROFIT_RETRY_MAX}: bump to {next_price*100:.1f}%",
+                                f"止盈重试 {attempt_idx+2}/{TAKE_PROFIT_RETRY_MAX}：提价至 {next_price*100:.1f}%",
                                 "WARN",
                             )
                             attempt_price = next_price
@@ -1163,11 +1162,11 @@ def main():
                             )
                             _sync_dashboard_account_snapshot(dashboard_user)
                             tp_order = dict(state.get("take_profit_order") or {})
-                            log(f"TP order live id {tp_order_id}", "TRADE")
+                            log(f"止盈单已挂单 ID {tp_order_id}", "TRADE")
                         else:
-                            log(f"TP order failed: {pos_side} @ {attempt_price*100:.1f}%", "ERR")
+                            log(f"止盈单失败：{pos_side} @ {attempt_price*100:.1f}%", "ERR")
                     elif not SIMULATION_MODE:
-                        log(f"Alert: consider SELL {pos_side} @ {tp_sell_price*100:.1f}% (size {position_size:.4f})", "TRADE")
+                        log(f"提醒：考虑卖出 {pos_side} @ {tp_sell_price*100:.1f}%（数量 {position_size:.4f}）", "TRADE")
                         _emit_trading_analysis(
                             "SELL_ALERT",
                             reason="take_profit",
@@ -1190,7 +1189,7 @@ def main():
 
                 if (not SIMULATION_MODE) and pos and stop_loss_triggered:
                     log(
-                        f"Stop hit: {pos_side} prob {current_prob*100:.1f}% <= stop {stop_prob*100:.1f}% (entry {entry_prob*100:.1f}%)",
+                        f"止损触发：{pos_side} 概率 {current_prob*100:.1f}% <= 止损 {stop_prob*100:.1f}%（入场 {entry_prob*100:.1f}%）",
                         "TRADE",
                     )
 
@@ -1282,7 +1281,7 @@ def main():
                             cumulative_realized_pnl=cum if sell_order_id else _to_float(state.get("cumulative_realized_pnl"), 0.0),
                         )
                         _sync_dashboard_account_snapshot(dashboard_user)
-                        log(f"Stop-loss sell done: {pos_side} @ {sell_price*100:.2f}%", "TRADE")
+                        log(f"止损卖出完成：{pos_side} @ {sell_price*100:.2f}%", "TRADE")
 
             time.sleep(LOOP_INTERVAL_SEC)
 

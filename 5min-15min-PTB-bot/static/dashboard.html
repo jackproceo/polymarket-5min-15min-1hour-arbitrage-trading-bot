@@ -269,9 +269,159 @@
       color: var(--text-tertiary);
       font-weight: 500;
     }
+
+    /* ── 登录遮罩 ── */
+    .login-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: var(--bg-primary);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px 32px;
+      width: 360px; max-width: 90vw;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+    .login-box h2 {
+      font-size: 1.2rem; font-weight: 700; margin-bottom: 4px;
+    }
+    .login-box p {
+      color: var(--text-tertiary); font-size: 0.85rem; margin-bottom: 24px;
+    }
+    .login-box input {
+      width: 100%; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 1rem; font-family: inherit;
+      outline: none; transition: border-color 0.15s;
+    }
+    .login-box input:focus { border-color: var(--accent); }
+    .login-box .login-err {
+      color: var(--red); font-size: 0.8rem; margin-top: 8px; display: none;
+    }
+    .login-box button {
+      margin-top: 16px; width: 100%; padding: 10px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius-sm); font-size: 0.95rem;
+      font-weight: 600; cursor: pointer; font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    .login-box button:hover { opacity: 0.85; }
+    .login-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .login-hidden { display: none !important; }
+
+    /* ── 页面标签导航 ── */
+    .page-nav {
+      display: flex; gap: 4px;
+      margin-bottom: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px;
+      box-shadow: var(--shadow-sm);
+    }
+    .page-nav-btn {
+      flex: 1;
+      border: none; background: transparent;
+      font-family: inherit; font-size: 0.8125rem; font-weight: 600;
+      padding: 10px 16px;
+      border-radius: calc(var(--radius-sm) - 2px);
+      cursor: pointer;
+      color: var(--text-tertiary);
+      transition: all 0.15s;
+    }
+    .page-nav-btn:hover { color: var(--text-primary); background: var(--surface-hover); }
+    .page-nav-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+    .page { display: none; }
+    .page.page-active { display: block; }
+
+    /* ── 策略说明卡片 ── */
+    .strat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 700px) { .strat-grid { grid-template-columns: 1fr; } }
+    .strat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px 20px;
+      box-shadow: var(--shadow-md);
+    }
+    .strat-card h3 {
+      font-size: 0.75rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .strat-card p, .strat-card li {
+      font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;
+    }
+    .strat-card ul { padding-left: 16px; }
+    .strat-card li { margin-bottom: 4px; }
+    .strat-card .param {
+      display: inline-block;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--text-primary);
+    }
+
+    /* ── 筛选按钮 ── */
+    .filter-group {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
+    }
+    .filter-btn {
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text-tertiary);
+      font-family: inherit; font-size: 0.75rem; font-weight: 600;
+      padding: 5px 14px; border-radius: 999px; cursor: pointer;
+      transition: all 0.12s;
+    }
+    .filter-btn:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+    .filter-btn.active {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+
+    /* ── 统计概览条 ── */
+    .summary-bar {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .summary-item {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .summary-item strong {
+      font-family: "JetBrains Mono", monospace;
+      color: var(--text-primary);
+      margin-left: 4px;
+    }
   </style>
 </head>
 <body>
+
+<!-- ======== 登录遮罩 ======== -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>🔐 仪表盘已加密</h2>
+    <p>请输入密码以继续</p>
+    <input type="password" id="loginPwd" placeholder="输入密码" autocomplete="off">
+    <div class="login-err" id="loginErr">密码错误，请重试</div>
+    <button id="loginBtn">进入仪表盘</button>
+  </div>
+</div>
+
 <div class="wrap">
 
   <!-- ======== HEADER ======== -->
@@ -289,6 +439,16 @@
       <span class="badge" id="updatedAt">更新 --</span>
     </div>
   </header>
+
+  <!-- ======== 页面导航 ======== -->
+  <nav class="page-nav" id="pageNav">
+    <button type="button" class="page-nav-btn active" data-page="home">首页</button>
+    <button type="button" class="page-nav-btn" data-page="trades">交易记录</button>
+    <button type="button" class="page-nav-btn" data-page="balance">余额变动</button>
+  </nav>
+
+  <!-- ======== 首页 ======== -->
+  <div id="page-home" class="page page-active">
 
   <!-- ======== TOP ROW: Account | Stats | Market ======== -->
   <div class="grid-3">
@@ -337,6 +497,30 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- ======== 策略说明 ======== -->
+  <div class="strat-grid">
+    <div class="strat-card">
+      <h3>开仓条件</h3>
+      <p>系统监控 BTC 与 PTB（Price To Beat）之间的价差，当价差偏离超过阈值且 UP/DOWN 代币概率在设定范围内时自动开仓。共 4 组独立条件，任意一组满足即触发：</p>
+      <ul style="margin-top:8px">
+        <li><span class="param">C1</span> 回溯 <strong>120</strong> 秒 · 价差 <strong>≥30</strong> 基点 · 概率 80%–92%</li>
+        <li><span class="param">C2</span> 回溯 <strong>120</strong> 秒 · 价差 <strong>≥30</strong> 基点 · 概率 80%–92%</li>
+        <li><span class="param">C3</span> 回溯 <strong>60</strong> 秒 · 价差 <strong>≥50</strong> 基点 · 概率 80%–92%</li>
+        <li><span class="param">C4</span> 回溯 <strong>60</strong> 秒 · 价差 <strong>≥50</strong> 基点 · 概率 80%–92%</li>
+      </ul>
+      <p style="margin-top:8px">方向选择：BTC 价格低于 PTB 时买入 UP，高于 PTB 时买入 DOWN。</p>
+    </div>
+    <div class="strat-card">
+      <h3>平仓逻辑</h3>
+      <ul>
+        <li><strong>止盈 (Take Profit)</strong> — 当代币概率上涨至 <span class="param">TAKE_PROFIT_CAP</span>（默认 99%）或盈亏比达到 <span class="param">TAKE_PROFIT_RR</span>（默认 1.0）时自动卖出平仓。</li>
+        <li style="margin-top:8px"><strong>止损 (Stop Loss)</strong> — 当代币概率下跌至 <span class="param">STOP_LOSS_PROB_PCT</span>（默认 15%）以下时触发止损卖出，控制单笔最大亏损。</li>
+        <li style="margin-top:8px"><strong>自动赎回 (Auto-Redeem)</strong> — 持仓到期后，获胜方向代币自动通过 Builder Relayer 赎回为 USDC。</li>
+        <li style="margin-top:8px"><strong>模拟模式</strong> — 开启后不下真实订单，成交按盘口价格模拟，用于策略验证。</li>
+      </ul>
+    </div>
   </div>
 
   <!-- ======== BOTTOM ROW: Trades | Logs ======== -->
@@ -390,12 +574,167 @@
       </div>
     </section>
 
+  </div> <!-- /grid-2 -->
+
+  </div> <!-- /page-home -->
+
+  <!-- ======== 交易记录页 ======== -->
+  <div id="page-trades" class="page">
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">交易记录</span>
+        <span class="card-badge card-badge-db">DB</span>
+      </div>
+      <div class="summary-bar">
+        <span class="summary-item">总交易: <strong id="thTotal">-</strong></span>
+        <span class="summary-item">总盈亏: <strong id="thTotalPnl">-</strong></span>
+        <span class="summary-item">胜率: <strong id="thWinRate">-</strong></span>
+        <span class="summary-item">最大盈利: <strong id="thMaxWin">-</strong></span>
+        <span class="summary-item">最大亏损: <strong id="thMaxLoss">-</strong></span>
+      </div>
+      <div class="filter-group">
+        <button type="button" class="filter-btn active" data-filter="side" data-val="all">全部方向</button>
+        <button type="button" class="filter-btn" data-filter="side" data-val="UP">UP</button>
+        <button type="button" class="filter-btn" data-filter="side" data-val="DOWN">DOWN</button>
+        <span style="width:12px"></span>
+        <button type="button" class="filter-btn active" data-filter="result" data-val="all">全部结果</button>
+        <button type="button" class="filter-btn" data-filter="result" data-val="win">赢</button>
+        <button type="button" class="filter-btn" data-filter="result" data-val="loss">亏</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>方向</th>
+              <th>操作</th>
+              <th>入价</th>
+              <th>出价</th>
+              <th>金额</th>
+              <th>数量</th>
+              <th>盈亏</th>
+              <th>累计盈亏</th>
+              <th>价差</th>
+              <th>状态</th>
+              <th>结果</th>
+              <th>原因</th>
+            </tr>
+          </thead>
+          <tbody id="thBody">
+            <tr><td colspan="13" class="table-empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="count-badge" id="thCount">记录: 0</span>
+      </div>
+    </section>
   </div>
-</div>
+
+  <!-- ======== 余额变动页 ======== -->
+  <div id="page-balance" class="page">
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">余额变动历史</span>
+        <span class="card-badge card-badge-db">DB</span>
+      </div>
+      <div class="summary-bar">
+        <span class="summary-item">当前余额: <strong id="bhBalance">-</strong></span>
+        <span class="summary-item">总权益: <strong id="bhEquity">-</strong></span>
+        <span class="summary-item">已实现盈亏: <strong id="bhRealizedPnl">-</strong></span>
+        <span class="summary-item">累计盈亏: <strong id="bhCumPnl">-</strong></span>
+        <span class="summary-item">持仓数: <strong id="bhPositions">-</strong></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>余额</th>
+              <th>可用余额</th>
+              <th>持仓市值</th>
+              <th>总权益</th>
+              <th>浮动盈亏</th>
+              <th>已实现盈亏</th>
+              <th>累计盈亏</th>
+              <th>持仓数</th>
+              <th>BTC 价格</th>
+            </tr>
+          </thead>
+          <tbody id="bhBody">
+            <tr><td colspan="10" class="table-empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="count-badge" id="bhCount">记录: 0</span>
+      </div>
+    </section>
+  </div>
+
+</div> <!-- /wrap -->
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+
+// ── 密码认证 ──
+const PWD_KEY = "dash_pwd";
+let gPwd = localStorage.getItem(PWD_KEY) || "";
+
+// 从 URL 参数读取密码（SSE 首次加载时传入）
+const urlParams = new URLSearchParams(window.location.search);
+const urlPwd = urlParams.get("pwd") || "";
+if (urlPwd && !gPwd) {
+  gPwd = urlPwd;
+  localStorage.setItem(PWD_KEY, gPwd);
+  // 清除 URL 中的密码参数
+  const u = new URL(window.location.href);
+  u.searchParams.delete("pwd");
+  window.history.replaceState({}, "", u.toString());
+}
+
+// 给 fetch URL 追加密码参数
+function authUrl(path) {
+  const sep = path.includes("?") ? "&" : "?";
+  return gPwd ? path + sep + "pwd=" + encodeURIComponent(gPwd) : path;
+}
+async function authFetch(path, opts) {
+  return fetch(authUrl(path), opts || {});
+}
+
+// 登录流程
+async function doLogin() {
+  const input = $("loginPwd");
+  const errEl = $("loginErr");
+  const btn = $("loginBtn");
+  const pwd = input.value.trim();
+  if (!pwd) { input.focus(); return; }
+  btn.disabled = true;
+  errEl.style.display = "none";
+  try {
+    const r = await fetch("/api/auth?pwd=" + encodeURIComponent(pwd));
+    if (r.ok) {
+      gPwd = pwd;
+      localStorage.setItem(PWD_KEY, gPwd);
+      $("loginOverlay").classList.add("login-hidden");
+      initApp();
+    } else {
+      errEl.style.display = "block";
+    }
+  } catch(e) {
+    errEl.style.display = "block";
+    errEl.textContent = "连接失败，请检查服务是否运行";
+  }
+  btn.disabled = false;
+}
+$("loginBtn").addEventListener("click", doLogin);
+$("loginPwd").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+// 如果已有密码，直接隐藏遮罩并启动
+if (gPwd) {
+  $("loginOverlay").classList.add("login-hidden");
+}
 
 // ── DB 数据缓存 ──
 let dbStats = null;
@@ -417,13 +756,13 @@ const clsSide = (s) => { if(!s) return ""; const u=String(s).toUpperCase(); retu
 
 // ── 从 DB 获取数据 ──
 async function fetchDbStats() {
-  try { const r=await fetch("/api/db/stats"); if(r.ok) dbStats=await r.json(); } catch(e){}
+  try { const r=await authFetch("/api/db/stats"); if(r.ok) dbStats=await r.json(); } catch(e){}
 }
 async function fetchDbAccount() {
-  try { const r=await fetch("/api/db/account"); if(r.ok) dbAccount=await r.json(); } catch(e){}
+  try { const r=await authFetch("/api/db/account"); if(r.ok) dbAccount=await r.json(); } catch(e){}
 }
 async function fetchDbTrades() {
-  try { const r=await fetch("/api/db/trades?limit=100"); if(r.ok){ const j=await r.json(); if(j&&j.items) dbTrades=j.items; } } catch(e){}
+  try { const r=await authFetch("/api/db/trades?limit=100"); if(r.ok){ const j=await r.json(); if(j&&j.items) dbTrades=j.items; } } catch(e){}
 }
 
 // ── 渲染 DB 数据 ──
@@ -588,7 +927,7 @@ function renderLogs(items) {
 function startSSE() {
   if (!("EventSource" in window)) return;
   try {
-    const es = new EventSource("/api/stream");
+    const es = new EventSource(authUrl("/api/stream"));
     es.addEventListener("status", ev => {
       try { const d = JSON.parse(ev.data||"{}"); if (d && d.data) renderMarket(d.data); } catch(e){}
     });
@@ -604,27 +943,190 @@ async function pollDb() {
   renderAllDb();
 }
 
-// ── 初始化 ──
-pollDb();
-setInterval(pollDb, 5000);
-
-startSSE();
-
 // Fallback HTTP polling for live data
 async function pollStatus() {
   try {
-    const r = await fetch("/api/status", {cache:"no-store"});
+    const r = await authFetch("/api/status", {cache:"no-store"});
     if (r.ok) renderMarket(await r.json());
   } catch(_) {}
 }
 async function pollLogs() {
   try {
-    const r = await fetch("/api/logs", {cache:"no-store"});
+    const r = await authFetch("/api/logs", {cache:"no-store"});
     if (r.ok) { const j = await r.json(); renderLogs((j&&j.items)||[]); }
   } catch(_) {}
 }
-setInterval(pollStatus, 5000);
-setInterval(pollLogs, 2000);
+
+// 如果已有密码则直接启动，否则遮罩会拦截
+if (gPwd) initApp();
+
+// ── 页面切换 ──
+let currentPage = "home";
+function switchPage(pageId) {
+  currentPage = pageId;
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("page-active"));
+  const page = document.getElementById("page-" + pageId);
+  if (page) page.classList.add("page-active");
+  document.querySelectorAll(".page-nav-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === pageId);
+  });
+  if (pageId === "trades") renderTradeHistory();
+  if (pageId === "balance") renderBalanceHistory();
+}
+document.getElementById("pageNav").addEventListener("click", e => {
+  const btn = e.target.closest(".page-nav-btn");
+  if (btn) switchPage(btn.dataset.page);
+});
+
+// ── 交易记录页数据 ──
+let allTrades = [];
+let tradeFilterSide = "all";
+let tradeFilterResult = "all";
+
+async function fetchAllTrades() {
+  try {
+    const r = await authFetch("/api/db/trades?limit=200");
+    if (r.ok) { const j = await r.json(); if (j && j.items) allTrades = j.items; }
+  } catch(_) {}
+}
+
+function renderTradeHistory() {
+  let rows = allTrades;
+  if (tradeFilterSide !== "all") rows = rows.filter(t => (t.side||"").toUpperCase() === tradeFilterSide);
+  if (tradeFilterResult !== "all") rows = rows.filter(t => (t.result||"") === tradeFilterResult);
+
+  const totalPnl = rows.reduce((s, t) => s + (maybeNum(t.pnl_usd) || 0), 0);
+  const wins = rows.filter(t => t.result === "win").length;
+  const losses = rows.filter(t => t.result === "loss").length;
+  const maxWin = rows.length ? Math.max(0, ...rows.map(t => maybeNum(t.pnl_usd)||0)) : 0;
+  const maxLoss = rows.length ? Math.min(0, ...rows.map(t => maybeNum(t.pnl_usd)||0)) : 0;
+
+  $("thTotal").textContent = rows.length;
+  $("thTotalPnl").textContent = fmtSigned(totalPnl, 3);
+  $("thTotalPnl").className = "summary-item";
+  $("thWinRate").textContent = rows.length ? (wins / (wins + losses || 1) * 100).toFixed(1) + "%" : "-";
+  $("thMaxWin").textContent = fmtSigned(maxWin, 3);
+  $("thMaxLoss").textContent = fmtSigned(maxLoss, 3);
+
+  $("thCount").textContent = "记录: " + rows.length;
+  const tbody = $("thBody");
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="table-empty">暂无交易记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(t => {
+    const side = (t.side||"").toUpperCase();
+    const action = (t.action||"").toUpperCase();
+    const entry = maybeNum(t.entry_price);
+    const exit = maybeNum(t.exit_price);
+    const amount = maybeNum(t.amount_usdc);
+    const shares = maybeNum(t.shares);
+    const pnl = maybeNum(t.pnl_usd);
+    const cumPnl = maybeNum(t.cumulative_pnl_usd);
+    const diff = maybeNum(t.diff_at_trade);
+    const status = t.status || "-";
+    const result = t.result || "-";
+    const reason = t.open_reason || "-";
+    return `<tr>
+      <td>${fmtTime(t.created_at)}</td>
+      <td class="${clsSide(side)}">${side}</td>
+      <td>${action==="BUY"?"买入":"卖出"}</td>
+      <td>${entry!==null?fmtPct(entry):"-"}</td>
+      <td>${exit!==null?fmtPct(exit):"-"}</td>
+      <td>${amount!==null?"$"+fmt(amount,2):"-"}</td>
+      <td>${shares!==null?fmt(shares,4):"-"}</td>
+      <td class="${clsPnl(pnl)}">${pnl!==null?fmtSigned(pnl,3):"-"}</td>
+      <td class="${clsPnl(cumPnl)}">${cumPnl!==null?fmtSigned(cumPnl,3):"-"}</td>
+      <td class="${diff!==null?(diff>=0?"text-up":"text-down"):""}">${diff!==null?(diff>=0?"+":"")+fmt(diff,0):"-"}</td>
+      <td>${status==="filled"?"成交":status}</td>
+      <td class="${result==="win"?"text-up":result==="loss"?"text-down":"text-warn"}">${result==="win"?"赢":result==="loss"?"亏":result}</td>
+      <td>${reason}</td>
+    </tr>`;
+  }).join("");
+}
+
+// 交易记录页筛选按钮
+document.getElementById("page-trades").addEventListener("click", e => {
+  const btn = e.target.closest(".filter-btn");
+  if (!btn) return;
+  const filter = btn.dataset.filter;
+  const val = btn.dataset.val;
+  if (filter === "side") {
+    tradeFilterSide = val;
+    document.querySelectorAll("#page-trades .filter-btn[data-filter='side']").forEach(b => b.classList.toggle("active", b.dataset.val === val));
+  } else if (filter === "result") {
+    tradeFilterResult = val;
+    document.querySelectorAll("#page-trades .filter-btn[data-filter='result']").forEach(b => b.classList.toggle("active", b.dataset.val === val));
+  }
+  renderTradeHistory();
+});
+
+// ── 余额变动页数据 ──
+let balanceHistory = [];
+
+async function fetchBalanceHistory() {
+  try {
+    const r = await authFetch("/api/db/account-history?limit=200");
+    if (r.ok) { const j = await r.json(); if (j && j.items) balanceHistory = j.items; }
+  } catch(_) {}
+}
+
+function renderBalanceHistory() {
+  const rows = balanceHistory;
+  $("bhCount").textContent = "记录: " + rows.length;
+
+  // Summary from latest
+  if (rows.length) {
+    const l = rows[0];
+    $("bhBalance").textContent = maybeNum(l.balance) !== null ? "$"+fmt(l.balance,2) : "-";
+    $("bhEquity").textContent = maybeNum(l.total_equity) !== null ? "$"+fmt(l.total_equity,2) : "-";
+    $("bhRealizedPnl").textContent = fmtSigned(maybeNum(l.realized_pnl), 3);
+    $("bhCumPnl").textContent = fmtSigned(maybeNum(l.cumulative_pnl), 3);
+    $("bhPositions").textContent = l.open_positions_count != null ? l.open_positions_count : "-";
+  }
+
+  const tbody = $("bhBody");
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="table-empty">暂无余额变动记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const bal = maybeNum(r.balance);
+    const avail = maybeNum(r.available_balance);
+    const posVal = maybeNum(r.position_value);
+    const eq = maybeNum(r.total_equity);
+    const upnl = maybeNum(r.unrealized_pnl);
+    const rpnl = maybeNum(r.realized_pnl);
+    const cpnl = maybeNum(r.cumulative_pnl);
+    return `<tr>
+      <td>${fmtTime(r.created_at)}</td>
+      <td>${bal!==null?"$"+fmt(bal,2):"-"}</td>
+      <td>${avail!==null?"$"+fmt(avail,2):"-"}</td>
+      <td>${posVal!==null?"$"+fmt(posVal,2):"-"}</td>
+      <td>${eq!==null?"$"+fmt(eq,2):"-"}</td>
+      <td class="${clsPnl(upnl)}">${upnl!==null?fmtSigned(upnl,3):"-"}</td>
+      <td class="${clsPnl(rpnl)}">${rpnl!==null?fmtSigned(rpnl,3):"-"}</td>
+      <td class="${clsPnl(cpnl)}">${cpnl!==null?fmtSigned(cpnl,3):"-"}</td>
+      <td>${r.open_positions_count != null ? r.open_positions_count : "-"}</td>
+      <td>${maybeNum(r.btc_price)!==null?"$"+fmt(r.btc_price,0):"-"}</td>
+    </tr>`;
+  }).join("");
+}
+
+// ── 增强初始化 ──
+function initApp() {
+  pollDb();
+  setInterval(pollDb, 5000);
+  startSSE();
+  setInterval(pollStatus, 5000);
+  setInterval(pollLogs, 2000);
+
+  // 新页面数据轮询
+  fetchAllTrades();
+  fetchBalanceHistory();
+  setInterval(fetchAllTrades, 5000);
+  setInterval(fetchBalanceHistory, 10000);
+}
 
 // 周期切换
 document.querySelectorAll(".interval-btn").forEach(btn => {
@@ -633,7 +1135,7 @@ document.querySelectorAll(".interval-btn").forEach(btn => {
     if (!Number.isFinite(m)) return;
     document.querySelectorAll(".interval-btn").forEach(b => b.disabled = true);
     try {
-      const r = await fetch("/api/btc-market-minutes", {
+      const r = await authFetch("/api/btc-market-minutes", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({minutes:m})
       });

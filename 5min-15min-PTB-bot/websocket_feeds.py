@@ -39,12 +39,12 @@ class BTCPriceListener:
 
     def on_close(self, ws, *args):
         if self.running:
-            log("BTC feed disconnected, reconnecting in 5s...", "WARN")
+            log("BTC 数据源断开，5 秒后重连...", "WARN")
             time.sleep(5)
             self.start()
 
     def on_open(self, ws):
-        log("BTC WebSocket connected", "OK")
+        log("BTC WebSocket 已连接", "OK")
 
     def start(self):
         self.running = True
@@ -138,7 +138,7 @@ class MarketPriceListener:
 
     def on_close(self, ws, *args):
         if self.running:
-            log("Market feed disconnected, reconnecting in 5s...", "WARN")
+            log("市场数据源断开，5 秒后重连...", "WARN")
             time.sleep(5)
             self.start()
 
@@ -147,7 +147,7 @@ class MarketPriceListener:
             "assets_ids": [self.up_token, self.down_token],
             "type": "market"
         }))
-        log("Market WebSocket connected", "OK")
+        log("市场 WebSocket 已连接", "OK")
 
     def start(self):
         self.running = True
