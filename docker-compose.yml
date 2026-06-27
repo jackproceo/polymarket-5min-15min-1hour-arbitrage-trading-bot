@@ -81,6 +81,9 @@ services:
       # (create data/ dir with empty state.json + trading_analysis.jsonl before first run)
       - ./5min-15min-PTB-bot/data/state.json:/app/state.json
       - ./5min-15min-PTB-bot/data/trading_analysis.jsonl:/app/trading_analysis.jsonl
+      - ./5min-15min-PTB-bot/data/trading.db:/app/data/trading.db
+      - ./5min-15min-PTB-bot/data:/app/data
+      - ./5min-15min-PTB-bot/logs:/app/logs
     logging: *default-logging
     networks:
       - polymarket-net
