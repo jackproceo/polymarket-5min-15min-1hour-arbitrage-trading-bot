@@ -1742,6 +1742,11 @@ def _sync_dashboard_account_snapshot(user):
     realized_pnl = _compute_wallet_realized_pnl(wallet_closed)
     unrealized_pnl = _compute_wallet_unrealized_pnl(wallet_positions)
     wallet_balance = _fetch_wallet_usdc_balance(u)
+    # 模拟模式：用累计 PnL 推算模拟余额，替代链上真实余额
+    if SIMULATION_MODE:
+        from database import INITIAL_BALANCE_USDC
+        sim_pnl = float(dashboard_state.get("cumulative_realized_pnl") or 0.0)
+        wallet_balance = max(0.0, INITIAL_BALANCE_USDC + sim_pnl)
     _dashboard_set(
         wallet_balance=wallet_balance,
         wallet_positions=list(wallet_positions)[:120],

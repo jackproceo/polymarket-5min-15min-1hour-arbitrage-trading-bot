@@ -35,7 +35,9 @@ cd /opt/polymarket-5min-15min-1hour-arbitrage-trading-bot
 git stash
 # 2. 拉取最新代码
 git pull
-
+docker-compose.yml多个,单独docker构建:
+docker compose build bot-ptb
+docker compose up -d --no-deps bot-ptb
 # 3. 重新构建镜像（有缓存的层不会重下，很快）
 docker compose build
 
