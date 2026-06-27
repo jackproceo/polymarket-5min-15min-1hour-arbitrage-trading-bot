@@ -1,1133 +1,648 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BTC 自动交易仪表盘</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      color-scheme: dark;
-      --bg: #0a0e14;
-      --bg-accent: #0f1419;
-      --surface: #151b26;
-      --surface-muted: #0f131c;
-      --line: #2a3548;
-      --line-strong: #3d4d66;
-      --text: #e8edf4;
-      --muted: #8b9bb5;
-      --ink: #d4dce8;
-      --accent: #60a5fa;
-      --accent-soft: rgba(96, 165, 250, 0.14);
-      --ok: #34d399;
-      --warn: #fbbf24;
-      --err: #f87171;
-      --ok-soft: rgba(52, 211, 153, 0.14);
-      --warn-soft: rgba(251, 191, 36, 0.12);
-      --err-soft: rgba(248, 113, 113, 0.14);
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.03);
-      --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.45);
-      --radius: 14px;
-      --radius-sm: 10px;
+      --bg-primary: #f2f4f8;
+      --bg-secondary: #ffffff;
+      --surface: #ffffff;
+      --surface-alt: #f0f2f6;
+      --surface-hover: #e8ecf3;
+      --border: #dce1ea;
+      --border-light: #e6eaf2;
+      --text-primary: #1c1f2b;
+      --text-secondary: #5e6e85;
+      --text-tertiary: #8e9db0;
+      --accent: #3b82f6;
+      --accent-soft: rgba(59, 130, 246, 0.08);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.08);
+      --red: #ef4444;
+      --red-soft: rgba(239, 68, 68, 0.08);
+      --yellow: #f59e0b;
+      --yellow-soft: rgba(245, 158, 11, 0.08);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.02);
+      --shadow-lg: 0 12px 24px rgba(0,0,0,0.07);
+      --radius: 12px;
+      --radius-sm: 8px;
     }
-    * { box-sizing: border-box; }
+    html { font-size: 14px; }
     body {
-      margin: 0;
-      color: var(--text);
-      font-family: "DM Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-      font-size: 15px;
-      line-height: 1.5;
-      background:
-        radial-gradient(1100px 500px at -5% -10%, rgba(59, 130, 246, 0.14) 0%, transparent 58%),
-        radial-gradient(900px 420px at 105% -5%, rgba(52, 211, 153, 0.08) 0%, transparent 52%),
-        linear-gradient(165deg, var(--bg) 0%, var(--bg-accent) 55%, #0a0d12 100%);
+      font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
       min-height: 100vh;
+      line-height: 1.5;
     }
-    .wrap { max-width: 1420px; margin: 0 auto; padding: 24px 20px 32px; }
-    .head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 22px;
-      flex-wrap: wrap;
-      padding-bottom: 20px;
-      border-bottom: 1px solid var(--line);
-    }
-    .title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--text);
-      line-height: 1.25;
-    }
-    .title::after {
-      content: "";
-      display: block;
-      width: 48px;
-      height: 3px;
-      margin-top: 10px;
-      border-radius: 2px;
-      background: linear-gradient(90deg, #60a5fa, #22d3ee);
-    }
-    .sub, .muted { color: var(--muted); font-size: 0.8125rem; }
-    .sub { margin-top: 6px; font-weight: 500; }
-    .head-badges { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-    .interval-bar {
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 20px 24px 40px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    /* Header */
+    .header {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 0 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .header-left { display: flex; flex-direction: column; gap: 4px; }
+    .header-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #1c1f2b 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-sub {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .header-sub span { color: var(--accent); }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       flex-wrap: wrap;
     }
-    .interval-label {
-      font-size: 0.6875rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
+    .interval-group {
+      display: flex;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 2px;
     }
     .interval-btn {
-      border: 1px solid var(--line-strong);
-      background: var(--surface-muted);
-      color: var(--muted);
+      border: none;
+      background: transparent;
+      color: var(--text-tertiary);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .interval-btn:hover { color: var(--text-primary); }
+    .interval-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .interval-btn:disabled { opacity: 0.4; cursor: wait; pointer-events: none; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 999px;
       padding: 7px 14px;
       font-size: 0.8125rem;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
-    }
-    .interval-btn:hover {
-      border-color: var(--accent);
-      color: #bfdbfe;
-    }
-    .interval-btn.active {
-      border-color: rgba(96, 165, 250, 0.45);
-      background: var(--accent-soft);
-      color: #93c5fd;
-    }
-    .interval-btn:disabled {
-      opacity: 0.45;
-      cursor: wait;
-      pointer-events: none;
-    }
-    .badge {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 8px 14px;
-      background: var(--surface);
-      color: var(--ink);
-      font-size: 0.8125rem;
       font-weight: 600;
-      box-shadow: var(--shadow-sm);
+      color: var(--text-secondary);
     }
-    #walletBalance {
-      border-color: rgba(96, 165, 250, 0.35);
+    .badge-accent {
+      border-color: var(--accent);
       background: var(--accent-soft);
-      color: #93c5fd;
+      color: var(--accent);
     }
-    #updatedAt {
-      color: var(--muted);
-      font-weight: 500;
-      background: var(--surface-muted);
-      border-color: var(--line);
-    }
-    .grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.95fr); gap: 18px; align-items: start; }
-    .grid > * { min-width: 0; }
-    .left { display: grid; gap: 18px; }
+
+    /* Grid */
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+    @media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 860px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+
+    /* Card */
     .card {
-      position: relative;
-      overflow: hidden;
       background: var(--surface);
-      border: 1px solid var(--line);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 18px 18px 16px;
+      padding: 18px 20px 20px;
       box-shadow: var(--shadow-md);
     }
-    .card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: linear-gradient(135deg, rgba(96, 165, 250, 0.07) 0%, transparent 42%, transparent 58%, rgba(34, 211, 238, 0.05) 100%);
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
     }
-    .card > * { position: relative; z-index: 1; }
-    .card h3 {
-      margin: 0;
+    .card-title {
       font-size: 0.6875rem;
       font-weight: 700;
       letter-spacing: 0.08em;
-      color: var(--muted);
       text-transform: uppercase;
+      color: var(--text-tertiary);
     }
-    .card-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; gap: 12px; }
-    .card-tools { display: flex; gap: 8px; align-items: center; }
-    .mini-btn {
-      border: 1px solid var(--line-strong);
-      background: var(--surface-muted);
-      color: var(--ink);
+    .card-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .card-badge-db { background: var(--green-soft); color: var(--green); }
+    .card-badge-live { background: var(--yellow-soft); color: var(--yellow); }
+
+    /* Metric grid */
+    .metrics { display: grid; gap: 10px; }
+    .metrics-2 { grid-template-columns: 1fr 1fr; }
+    .metrics-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .metrics-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    @media (max-width: 600px) {
+      .metrics-2, .metrics-3, .metrics-4 { grid-template-columns: 1fr 1fr; }
+    }
+    .metric {
+      background: var(--surface-alt);
       border-radius: var(--radius-sm);
-      padding: 5px 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+    }
+    .metric-label {
       font-size: 0.6875rem;
       font-weight: 600;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
     }
-    .mini-btn:hover {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--accent);
+    .metric-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      font-family: "JetBrains Mono", monospace;
     }
-    .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 260px)); gap: 12px; justify-content: start; }
-    .kv-tight { grid-template-columns: repeat(auto-fit, minmax(220px, 260px)); justify-content: start; }
-    .kv-price { grid-template-columns: repeat(3, minmax(220px, 260px)); }
-    .kv2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 260px)); gap: 12px; justify-content: start; }
-    .item {
-      border: 1px solid var(--line);
+    .metric-value-sm { font-size: 1rem; }
+    .metric-sub {
+      font-size: 0.7rem;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+    .text-up { color: var(--green); }
+    .text-down { color: var(--red); }
+    .text-warn { color: var(--yellow); }
+    .text-muted { color: var(--text-tertiary); }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 4px;
       border-radius: var(--radius-sm);
-      padding: 12px 14px;
-      min-height: 72px;
-      background: var(--surface-muted);
-      box-shadow: var(--shadow-sm);
-      transition: border-color 0.15s, box-shadow 0.15s;
+      border: 1px solid var(--border);
     }
-    .item:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
-    .k { color: var(--muted); font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .v { font-weight: 700; font-size: 1.125rem; color: var(--ink); word-break: break-all; }
-    .mono { font-family: "JetBrains Mono", Consolas, Monaco, "Courier New", monospace; font-size: 0.8125rem; font-weight: 500; }
-    .up { color: var(--ok); }
-    .down { color: var(--err); }
-    .warn { color: var(--warn); }
-    .logs {
-      height: calc(100vh - 190px);
-      min-height: 380px;
-      overflow: auto;
-      background: #080b10;
-      color: #cbd5e1;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      padding: 12px 14px;
-      font-size: 0.75rem;
-    }
-    .log { margin: 0 0 6px; font: 0.75rem/1.55 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-word; color: #94a3b8; }
-    .log-OK, .log-TRADE { color: var(--ok); }
-    .log-WARN { color: #fcd34d; }
-    .log-ERR { color: var(--err); }
-    .round-list {
-      margin-top: 10px;
-      height: 300px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      padding: 10px 10px 72px;
-      background: var(--surface-muted);
-    }
-    .round-item {
-      border-bottom: 1px solid var(--line);
-      padding: 8px 6px;
-      font-size: 0.75rem;
-      color: var(--ink);
-    }
-    .round-item:last-child { border-bottom: none; }
-    .history-list {
-      max-height: 240px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      padding: 8px;
-      background: var(--surface-muted);
-    }
-    .history-item { border-bottom: 1px solid var(--line); padding: 10px 8px; }
-    .history-item:last-child { border-bottom: none; }
-    .history-main { font-size: 0.8125rem; font-weight: 600; color: var(--text); }
-    .history-sub { margin-top: 4px; color: var(--muted); font-size: 0.75rem; }
-    .trade-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .trade-field {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      padding: 12px 14px;
-      background: var(--surface-muted);
-    }
-    .trade-field label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
-    .trade-field input, .trade-field select {
+    table {
       width: 100%;
-      border: 1px solid var(--line-strong);
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+    thead { background: var(--surface-alt); }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-hover); }
+    .table-empty {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-tertiary);
+      font-size: 0.8125rem;
+    }
+
+    /* Logs */
+    .logs-box {
+      height: 320px;
+      overflow-y: auto;
+      background: #fafbfc;
+      border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       padding: 10px 12px;
-      font-size: 0.9375rem;
-      color: var(--text);
-      background: var(--surface-muted);
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem;
+      line-height: 1.55;
     }
-    .trade-field input:focus, .trade-field select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
-    }
-    .trade-actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn {
-      border: 1px solid var(--line-strong);
-      background: var(--surface-muted);
-      border-radius: var(--radius-sm);
-      padding: 10px 16px;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      cursor: pointer;
-      color: var(--ink);
-      transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, background 0.15s, color 0.15s;
-    }
-    .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-lg);
-      border-color: var(--accent);
-      color: #bfdbfe;
-    }
-    .btn-buy {
-      background: linear-gradient(180deg, #059669, #047857);
-      border-color: #10b981;
-      color: #ecfdf5;
-    }
-    .btn-buy:hover {
-      background: linear-gradient(180deg, #047857, #065f46);
-      border-color: #34d399;
-      color: #fff;
-    }
-    .btn-sell {
-      background: var(--surface-muted);
-      border-color: rgba(248, 113, 113, 0.4);
-      color: #fca5a5;
-    }
-    .btn-sell:hover {
-      background: var(--err-soft);
-      border-color: var(--err);
-      color: #fecaca;
-    }
-    .trade-tip { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); line-height: 1.45; }
-    .quick-amounts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    .chip {
-      border: 1px solid var(--line-strong);
-      background: var(--surface-muted);
-      color: var(--ink);
-      border-radius: 999px;
-      padding: 6px 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
-    }
-    .chip:hover {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    @media (max-width: 1080px) {
-      .grid { grid-template-columns: 1fr; }
-      .logs { height: 360px; min-height: 300px; }
-      .round-list { height: 220px; }
-      .kv, .kv-tight, .kv2, .kv-price { grid-template-columns: 1fr 1fr; justify-content: stretch; }
-    }
-    @media (max-width: 760px) {
-      .kv, .kv-tight, .kv2, .kv-price, .trade-panel { grid-template-columns: 1fr; }
-      .v { font-size: 1rem; }
-      .trade-actions { flex-direction: column; }
-      .head { align-items: stretch; }
+    .log-line { color: var(--text-tertiary); padding: 1px 0; }
+    .log-OK, .log-TRADE { color: var(--green); }
+    .log-WARN { color: var(--yellow); }
+    .log-ERR { color: var(--red); }
+
+    /* Loading skeleton */
+    .loading { color: var(--text-tertiary); font-size: 0.75rem; }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+
+    /* Count badge */
+    .count-badge {
+      font-size: 0.65rem;
+      color: var(--text-tertiary);
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="head">
-      <div>
-        <div class="title">Polymarket BTC 自动交易仪表盘</div>
-        <div id="marketSlug" class="sub">市场: -</div>
-      </div>
-      <div class="head-badges">
-        <div class="interval-bar" role="group" aria-label="BTC market duration">
-          <span class="interval-label">周期</span>
-          <button type="button" class="interval-btn" data-min="5" id="intervalBtn5m">5m</button>
-          <button type="button" class="interval-btn" data-min="15" id="intervalBtn15m">15m</button>
-        </div>
-        <div id="walletBalance" class="badge">余额: -</div>
-        <div id="updatedAt" class="badge">更新: -</div>
-      </div>
+<div class="wrap">
+
+  <!-- ======== HEADER ======== -->
+  <header class="header">
+    <div class="header-left">
+      <div class="header-title">Polymarket BTC 自动交易</div>
+      <div class="header-sub">市场: <span id="marketSlug">-</span> &middot; <span id="simMode"></span></div>
     </div>
-
-    <div class="grid">
-      <div class="left">
-        <section class="card">
-          <h3>市场</h3>
-          <div class="kv kv-tight">
-            <div class="item"><div class="k">剩余时间</div><div id="remainingText" class="v">-</div></div>
-            <div class="item"><div class="k">市场状态</div><div id="marketStatus" class="v">-</div></div>
-            <div class="item"><div class="k">价格更新时间</div><div id="priceUpdatedTs" class="v mono">-</div></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>价格与价差</h3>
-          <div class="kv kv-tight kv-price">
-            <div class="item"><div class="k">PTB</div><div id="ptb" class="v">-</div></div>
-            <div class="item"><div class="k">Chainlink BTC</div><div id="chainlink" class="v">-</div></div>
-            <div class="item"><div class="k">Binance BTC</div><div id="binance" class="v">-</div></div>
-            <div class="item"><div class="k">UP 价格</div><div id="upPrice" class="v">-</div></div>
-            <div class="item"><div class="k">DOWN 价格</div><div id="downPrice" class="v">-</div></div>
-            <div class="item"><div class="k">价差 (BTC-PTB)</div><div id="diff" class="v">-</div></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>手动交易</h3>
-          <div class="trade-panel">
-            <div class="trade-field">
-              <label>方向</label>
-              <select id="manualOutcome">
-                <option value="UP">UP</option>
-                <option value="DOWN">DOWN</option>
-              </select>
-            </div>
-            <div class="trade-field">
-              <label>订单金额 (USDC)</label>
-              <input id="manualAmount" type="number" min="0.1" step="0.1" value="5">
-              <div class="quick-amounts" id="quickAmounts">
-                <button type="button" class="chip" data-amt="5">$5</button>
-                <button type="button" class="chip" data-amt="10">$10</button>
-                <button type="button" class="chip" data-amt="20">$20</button>
-                <button type="button" class="chip" data-amt="50">$50</button>
-              </div>
-            </div>
-            <div class="trade-field" style="grid-column:1 / -1;">
-              <label>目标概率 (0.6 或 60)</label>
-              <input id="manualProb" type="number" min="1" max="99" step="0.1" value="60">
-            </div>
-            <div class="trade-field">
-              <label>止盈水平 (0.6 或 60)</label>
-              <input id="manualTpProb" type="number" min="1" max="99" step="0.1" placeholder="例如 98.5">
-            </div>
-            <div class="trade-field">
-              <label>止损水平 (0.6 或 60)</label>
-              <input id="manualSlProb" type="number" min="1" max="99" step="0.1" placeholder="例如 92">
-            </div>
-            <div class="trade-actions">
-              <button id="manualBuyBtn" class="btn btn-buy">买入</button>
-              <button id="manualSellBtn" class="btn btn-sell">卖出</button>
-              <button id="manualTpBtn" class="btn btn-sell">卖出(止盈)</button>
-              <button id="manualSlBtn" class="btn btn-sell">卖出(止损)</button>
-            </div>
-            <div id="manualTip" class="trade-tip">注意：提交前请确认市场和价格，成交以交易所为准。</div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>订单与持仓</h3>
-          <div class="kv2">
-            <div class="item"><div class="k">持仓</div><div id="position" class="v mono">-</div></div>
-            <div class="item"><div class="k">未成交订单</div><div id="pendingOrder" class="v mono">-</div></div>
-            <div class="item" style="grid-column:1 / -1;"><div class="k">最近订单</div><div id="lastOrder" class="v mono">-</div></div>
-          </div>
-        </section>
-
-        <section class="card">
-          <h3>交易历史</h3>
-          <div class="kv" style="margin-bottom:8px;">
-            <div class="item"><div class="k">已实现盈亏</div><div id="pnlRealized" class="v">$0.000</div></div>
-            <div class="item"><div class="k">未实现盈亏</div><div id="pnlUnrealized" class="v">$0.000</div></div>
-            <div class="item"><div class="k">总盈亏</div><div id="pnlTotal" class="v">$0.000</div></div>
-            <div class="item"><div class="k">胜率</div><div id="winRate" class="v">-</div></div>
-          </div>
-          <div class="muted" id="historyCount" style="margin-bottom:8px;">记录: 0</div>
-          <div id="historyList" class="history-list"></div>
-        </section>
-
-        <section class="card">
-          <h3>自动赎回(中继)</h3>
-          <div class="kv">
-            <div class="item"><div class="k">状态</div><div id="redeemEnabled" class="v">-</div></div>
-            <div class="item"><div class="k">待赎回</div><div id="redeemPending" class="v">-</div></div>
-            <div class="item"><div class="k">可领取(本钱包)</div><div id="redeemClaimable" class="v">-</div></div>
-          </div>
-          <div id="redeemResult" class="muted" style="margin-top:10px;">上次结果: -</div>
-          <div id="redeemError" class="muted" style="margin-top:6px;">上次错误: -</div>
-        </section>
-
+    <div class="header-right">
+      <div class="interval-group" role="group" aria-label="周期切换">
+        <button type="button" class="interval-btn" data-min="5">5m</button>
+        <button type="button" class="interval-btn" data-min="15">15m</button>
       </div>
-
-      <section class="card" style="min-width:300px;">
-        <h3>实时日志</h3>
-        <div id="logs" class="logs"></div>
-        <div id="roundCount" class="muted" style="margin-top:10px;">轮次: 0</div>
-        <div id="roundResultList" class="round-list"></div>
-      </section>
+      <span class="badge badge-accent" id="walletBalance">余额 --</span>
+      <span class="badge" id="updatedAt">更新 --</span>
     </div>
+  </header>
+
+  <!-- ======== TOP ROW: Account | Stats | Market ======== -->
+  <div class="grid-3">
+
+    <!-- 账户总览 (DB) -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">账户总览</span>
+        <span class="card-badge card-badge-db">DB</span>
+      </div>
+      <div class="metrics metrics-2" id="accountOverview">
+        <div class="metric"><div class="metric-label">余额</div><div class="metric-value" id="accBalance">--</div></div>
+        <div class="metric"><div class="metric-label">总权益</div><div class="metric-value" id="accEquity">--</div></div>
+        <div class="metric"><div class="metric-label">已实现盈亏</div><div class="metric-value metric-value-sm" id="accRealizedPnl">--</div></div>
+        <div class="metric"><div class="metric-label">累计盈亏</div><div class="metric-value metric-value-sm" id="accCumulativePnl">--</div></div>
+      </div>
+    </section>
+
+    <!-- 交易统计 (DB) -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">交易统计</span>
+        <span class="card-badge card-badge-db">DB</span>
+      </div>
+      <div class="metrics metrics-2" id="tradeStats">
+        <div class="metric"><div class="metric-label">总交易</div><div class="metric-value" id="tsTotal">--</div></div>
+        <div class="metric"><div class="metric-label">胜率</div><div class="metric-value" id="tsWinRate">--</div></div>
+        <div class="metric"><div class="metric-label">总盈亏</div><div class="metric-value metric-value-sm" id="tsTotalPnl">--</div></div>
+        <div class="metric"><div class="metric-label">平均盈亏</div><div class="metric-value metric-value-sm" id="tsAvgPnl">--</div></div>
+      </div>
+    </section>
+
+    <!-- 实时市场 (SSE Live) -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">实时市场</span>
+        <span class="card-badge card-badge-live">LIVE</span>
+      </div>
+      <div class="metrics metrics-3" id="liveMarket">
+        <div class="metric"><div class="metric-label">PTB</div><div class="metric-value metric-value-sm" id="mktPtb">--</div></div>
+        <div class="metric"><div class="metric-label">Chainlink BTC</div><div class="metric-value metric-value-sm" id="mktChainlink">--</div></div>
+        <div class="metric"><div class="metric-label">Binance BTC</div><div class="metric-value metric-value-sm" id="mktBinance">--</div></div>
+        <div class="metric"><div class="metric-label">价差 (BTC-PTB)</div><div class="metric-value metric-value-sm" id="mktDiff">--</div></div>
+        <div class="metric"><div class="metric-label">UP 价格</div><div class="metric-value metric-value-sm" id="mktUpPrice">--</div></div>
+        <div class="metric"><div class="metric-label">DOWN 价格</div><div class="metric-value metric-value-sm" id="mktDownPrice">--</div></div>
+      </div>
+    </section>
+
   </div>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    let logSig = "";
-    let historySig = "";
-    let roundSig = "";
-    let remainingEndsAtMs = null;
-    let latestMarket = {};
-    let latestPrices = {};
-    const priceTrend = {
-      chainlink: { base: null, sec: 0 },
-      binance: { base: null, sec: 0 },
-      up: { base: null, sec: 0 },
-      down: { base: null, sec: 0 },
-    };
+  <!-- ======== BOTTOM ROW: Trades | Logs ======== -->
+  <div class="grid-2">
 
-    function fmtRemainingSec(sec) {
-      const s = Math.max(0, Number(sec) || 0);
-      return `${Math.floor(s / 60)}m ${s % 60}s`;
-    }
+    <!-- 交易记录 (DB) -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">交易记录</span>
+        <span class="card-badge card-badge-db">DB</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>方向</th>
+              <th>操作</th>
+              <th>入价</th>
+              <th>出价</th>
+              <th>金额</th>
+              <th>数量</th>
+              <th>盈亏</th>
+              <th>累计盈亏</th>
+              <th>价差</th>
+              <th>状态</th>
+              <th>结果</th>
+              <th>原因</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody">
+            <tr><td colspan="13" class="table-empty">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="count-badge" id="tradesCount">记录: 0</span>
+        <span class="count-badge" id="tradesDbLabel">SQLite</span>
+      </div>
+    </section>
 
-    setInterval(() => {
-      if (remainingEndsAtMs === null) return;
-      const sec = Math.max(0, Math.floor((remainingEndsAtMs - Date.now()) / 1000));
-      $("remainingText").textContent = fmtRemainingSec(sec);
-    }, 1000);
+    <!-- 实时日志 -->
+    <section class="card">
+      <div class="card-header">
+        <span class="card-title">实时日志</span>
+        <span class="card-badge card-badge-live">LIVE</span>
+      </div>
+      <div class="logs-box" id="logsBox"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+        <span class="count-badge" id="logCount">日志: 0</span>
+      </div>
+    </section>
 
-    function fmt(n, d = 2) {
-      if (n === null || n === undefined || Number.isNaN(Number(n))) return "-";
-      return Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-    }
-    function maybeNum(v) {
-      if (v === null || v === undefined || v === "") return null;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : null;
-    }
-    function fmtSignedMoney(v, digits = 3) {
-      if (v === null || v === undefined) return "--";
-      const n = Number(v);
-      if (!Number.isFinite(n)) return "--";
-      return `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(digits)}`;
-    }
-    function fmtPrice(v) { return v === null || v === undefined ? "-" : `$${fmt(v, 2)}`; }
-    function fmtPct(v) { return v === null || v === undefined ? "-" : `${fmt(Number(v) * 100, 2)}%`; }
-    function asText(v) { return (!v || Object.keys(v).length === 0) ? "-" : JSON.stringify(v); }
+  </div>
+</div>
 
-    function fmtPosition(v) {
-      if (!v || Object.keys(v).length === 0) return "-";
-      const side = v.side || "-";
-      const px = v.entry_price !== undefined ? `${fmt(Number(v.entry_price) * 100, 2)}%` : "-";
-      const df = v.entry_diff !== undefined ? `${Number(v.entry_diff) >= 0 ? "+" : ""}${fmt(v.entry_diff, 0)}` : "-";
-      const slug = v.slug || "-";
-      return `${side} | entry ${px} | Diff ${df} | ${slug}`;
-    }
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
 
-    function fmtWalletPositions(rows) {
-      const arr = Array.isArray(rows) ? rows : [];
-      if (!arr.length) return "-";
-      const top = arr.slice(0, 3).map((x) => {
-        const side = x.outcome || x.side || "-";
-        const size = x.size !== undefined ? fmt(x.size, 2) : "-";
-        const avg = x.avgPrice !== undefined ? `${fmt(Number(x.avgPrice) * 100, 2)}%` : (x.avg_price !== undefined ? `${fmt(Number(x.avg_price) * 100, 2)}%` : "-");
-        return `${side} ${size}@${avg}`;
-      }).join(" | ");
-      return `${top}${arr.length > 3 ? ` | +${arr.length - 3} 更多` : ""}`;
-    }
+// ── DB 数据缓存 ──
+let dbStats = null;
+let dbAccount = null;
+let dbTrades = [];
+let marketData = {};
+let latestPrices = {};
+const priceTrend = { chainlink: {base:null,sec:0}, binance: {base:null,sec:0}, up: {base:null,sec:0}, down: {base:null,sec:0} };
 
-    function fmtPending(v, currentSlug = "") {
-      if (!v || Object.keys(v).length === 0) return "-";
-      const pSlug = String(v.slug || "").trim();
-      const cSlug = String(currentSlug || "").trim();
-      if (pSlug && cSlug && pSlug !== cSlug) return "-";
-      return `${v.side || "-"} | px ${v.price !== undefined ? `${fmt(Number(v.price) * 100, 2)}%` : "-"} | order ${v.order_id || "-"}`;
-    }
+// ── 工具函数 ──
+const maybeNum = (v) => { if (v===null||v===void 0||v==="") return null; const n=Number(v); return Number.isFinite(n)?n:null; };
+const fmt = (n,d) => n===null||n===void 0||!Number.isFinite(Number(n)) ? "-" : Number(n).toLocaleString("en-US",{minimumFractionDigits:d||2,maximumFractionDigits:d||2});
+const fmtPct = (v) => v===null||v===void 0 ? "-" : (Number(v)*100).toFixed(2)+"%";
+const fmtSigned = (v,d) => { if(v===null||v===void 0) return "--"; const n=Number(v); if(!Number.isFinite(n)) return "--"; return (n>=0?"+":"")+"$"+Math.abs(n).toFixed(d||2); };
+const fmtPrice = (v) => v===null||v===void 0 ? "-" : "$"+fmt(v,2);
+const fmtTime = (iso) => { if(!iso) return "-"; try{const d=new Date(iso); return Number.isFinite(d.getTime())?d.toLocaleString("zh-CN",{hour12:false}):String(iso).slice(0,19);}catch(e){return String(iso).slice(0,19);} };
+const clsPnl = (v) => { if(v===null||v===void 0) return ""; const n=Number(v); return n>0?"text-up":n<0?"text-down":""; };
+const clsSide = (s) => { if(!s) return ""; const u=String(s).toUpperCase(); return u==="UP"?"text-up":u==="DOWN"?"text-down":""; };
 
-    function fmtPendingAny(v) {
-      if (!v || Object.keys(v).length === 0) return "-";
-      const slug = v.slug ? ` | ${v.slug}` : "";
-      return `${v.side || "-"} | px ${v.price !== undefined ? `${fmt(Number(v.price) * 100, 2)}%` : "-"} | order ${v.order_id || "-"}${slug}`;
-    }
+// ── 从 DB 获取数据 ──
+async function fetchDbStats() {
+  try { const r=await fetch("/api/db/stats"); if(r.ok) dbStats=await r.json(); } catch(e){}
+}
+async function fetchDbAccount() {
+  try { const r=await fetch("/api/db/account"); if(r.ok) dbAccount=await r.json(); } catch(e){}
+}
+async function fetchDbTrades() {
+  try { const r=await fetch("/api/db/trades?limit=100"); if(r.ok){ const j=await r.json(); if(j&&j.items) dbTrades=j.items; } } catch(e){}
+}
 
-    function fmtLast(v) {
-      if (!v || Object.keys(v).length === 0) return "-";
-      return `${v.key || "-"} | ${v.time || "-"}`;
-    }
+// ── 渲染 DB 数据 ──
+function renderDbStats() {
+  const s = dbStats || {};
+  $("tsTotal").textContent = s.total_trades ?? "--";
+  $("tsWinRate").textContent = s.win_rate != null ? s.win_rate+"%" : "--";
+  const tp = maybeNum(s.total_pnl);
+  $("tsTotalPnl").textContent = fmtSigned(tp,3);
+  $("tsTotalPnl").className = "metric-value metric-value-sm "+clsPnl(tp);
+  const ap = maybeNum(s.avg_pnl);
+  $("tsAvgPnl").textContent = fmtSigned(ap,3);
+  $("tsAvgPnl").className = "metric-value metric-value-sm "+clsPnl(ap);
+}
 
-    function toDateAny(v) {
-      if (v === null || v === undefined || v === "") return null;
-      if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim()))) {
-        const n = Number(v);
-        if (!Number.isFinite(n)) return null;
-        const ms = Math.abs(n) > 1e12 ? n : n * 1000;
-        const d = new Date(ms);
-        return Number.isFinite(d.getTime()) ? d : null;
-      }
-      const d = new Date(String(v));
-      return Number.isFinite(d.getTime()) ? d : null;
-    }
+function renderDbAccount() {
+  const a = dbAccount || {};
+  const bal = maybeNum(a.balance);
+  $("accBalance").textContent = bal!==null ? "$"+fmt(bal,2) : "--";
+  const eq = maybeNum(a.total_equity);
+  $("accEquity").textContent = eq!==null ? "$"+fmt(eq,2) : "--";
+  const rp = maybeNum(a.realized_pnl);
+  $("accRealizedPnl").textContent = fmtSigned(rp,3);
+  $("accRealizedPnl").className = "metric-value metric-value-sm "+clsPnl(rp);
+  const cp = maybeNum(a.cumulative_pnl);
+  $("accCumulativePnl").textContent = fmtSigned(cp,3);
+  $("accCumulativePnl").className = "metric-value metric-value-sm "+clsPnl(cp);
+}
 
-    function fmtBeijingTime(v) {
-      const d = toDateAny(v);
-      if (!d) return "-";
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Shanghai",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      }).formatToParts(d);
-      const pick = (name) => (parts.find((p) => p.type === name) || {}).value || "";
-      return `${pick("year")}-${pick("month")}-${pick("day")} ${pick("hour")}:${pick("minute")}:${pick("second")}`;
-    }
+function renderDbTrades() {
+  const rows = Array.isArray(dbTrades) ? dbTrades : [];
+  $("tradesCount").textContent = "记录: "+rows.length;
+  const tbody = $("tradesBody");
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="table-empty">暂无交易记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(t => {
+    const side = (t.side||"").toUpperCase();
+    const action = (t.action||"").toUpperCase();
+    const entry = maybeNum(t.entry_price);
+    const exit = maybeNum(t.exit_price);
+    const amount = maybeNum(t.amount_usdc);
+    const shares = maybeNum(t.shares);
+    const pnl = maybeNum(t.pnl_usd);
+    const cumPnl = maybeNum(t.cumulative_pnl_usd);
+    const diff = maybeNum(t.diff_at_trade);
+    const status = t.status || "-";
+    const result = t.result || "-";
+    const reason = t.open_reason || "-";
+    return `<tr>
+      <td>${fmtTime(t.created_at)}</td>
+      <td class="${clsSide(side)}">${side}</td>
+      <td>${action==="BUY"?"买入":"卖出"}</td>
+      <td>${entry!==null?fmtPct(entry):"-"}</td>
+      <td>${exit!==null?fmtPct(exit):"-"}</td>
+      <td>${amount!==null?"$"+fmt(amount,2):"-"}</td>
+      <td>${shares!==null?fmt(shares,4):"-"}</td>
+      <td class="${clsPnl(pnl)}">${pnl!==null?fmtSigned(pnl,3):"-"}</td>
+      <td class="${clsPnl(cumPnl)}">${cumPnl!==null?fmtSigned(cumPnl,3):"-"}</td>
+      <td class="${diff!==null?(diff>=0?"text-up":"text-down"):""}">${diff!==null?(diff>=0?"+":"")+fmt(diff,0):"-"}</td>
+      <td>${status==="filled"?"成交":status}</td>
+      <td class="${result==="win"?"text-up":result==="loss"?"text-down":"text-warn"}">${result==="win"?"赢":result==="loss"?"亏":result}</td>
+      <td>${reason}</td>
+    </tr>`;
+  }).join("");
+}
 
-    function fmtBeijingMarketText(start, end, slug) {
-      const s = fmtBeijingTime(start);
-      const e = fmtBeijingTime(end);
-      const compact = (a, b) => {
-        if (a === "-" || b === "-") return "-";
-        const ad = a.slice(0, 10), at = a.slice(11, 16);
-        const bd = b.slice(0, 10), bt = b.slice(11, 16);
-        if (ad === bd) return `CST ${ad} ${at}-${bt}`;
-        return `CST ${a} ~ ${b}`;
-      };
+function renderAllDb() {
+  renderDbStats();
+  renderDbAccount();
+  renderDbTrades();
+}
 
-      if (s !== "-" && e !== "-") return compact(s, e);
-      if (s !== "-") return `CST ${s}`;
+// ── 实时市场渲染 (来自 SSE) ──
+function renderMarket(data) {
+  const mkt = data.market || {};
+  const prices = data.prices || {};
+  marketData = data;
+  latestPrices = prices;
 
-      const slugText = String(slug || "");
-      const tsMatch = slugText.match(/-(\d{10})$/);
-      const durMatch = slugText.match(/-(\d+)m-/);
-      if (tsMatch) {
-        const startSec = Number(tsMatch[1]);
-        const durationMin = durMatch ? Math.max(1, Number(durMatch[1]) || 15) : 15;
-        const ps = fmtBeijingTime(startSec);
-        const pe = fmtBeijingTime(startSec + durationMin * 60);
-        const t = compact(ps, pe);
-        if (t !== "-") return t;
-      }
-      return "CST -";
-    }
+  $("marketSlug").textContent = mkt.slug || "-";
+  $("updatedAt").textContent = "更新 "+(data.updated_at ? fmtTime(data.updated_at) : "--");
 
-    function setDiff(v) {
-      const el = $("diff");
-      if (v === null || v === undefined || Number.isNaN(Number(v))) {
-        el.textContent = "-";
-        el.className = "v";
-        return;
-      }
-      const n = Number(v);
-      el.textContent = `${n >= 0 ? "+" : ""}${fmt(n, 0)}`;
-      el.className = `v ${n > 0 ? "up" : n < 0 ? "down" : "warn"}`;
-    }
+  const sim = data.simulation_mode;
+  $("simMode").textContent = sim ? "模拟模式" : "实盘模式";
 
-    function setPriceWithArrow(elId, priceVal, trendKey) {
-      const el = $(elId);
-      const n = maybeNum(priceVal);
-      if (n === null) {
-        el.textContent = "-";
-        el.className = "v";
-        priceTrend[trendKey] = { base: null, sec: 0 };
-        return;
-      }
+  const bal = data.wallet_balance;
+  $("walletBalance").textContent = bal!==null&&bal!==void 0 ? "余额 $"+fmt(bal,2) : "余额 --";
 
-      const nowSec = Math.floor(Date.now() / 1000);
-      const st = priceTrend[trendKey] || { base: null, sec: 0 };
-      let arrow = "→";
-      let cls = "warn";
-      if (st.base !== null) {
-        if (n > st.base) {
-          arrow = "↑";
-          cls = "up";
-        } else if (n < st.base) {
-          arrow = "↓";
-          cls = "down";
-        }
-      }
+  if (data.btc_market_minutes != null) {
+    document.querySelectorAll(".interval-btn").forEach(b => {
+      b.classList.toggle("active", Number(b.dataset.min) === Number(data.btc_market_minutes));
+    });
+  }
 
-      el.textContent = `${fmtPrice(n)} ${arrow}`;
-      el.className = `v ${cls}`;
+  // 价格
+  $("mktPtb").textContent = fmtPrice(prices.ptb);
+  setPriceArrow("mktChainlink", prices.chainlink_btc, "chainlink");
+  setPriceArrow("mktBinance", prices.binance_btc, "binance");
+  setPctArrow("mktUpPrice", prices.up_price, "up");
+  setPctArrow("mktDownPrice", prices.down_price, "down");
+  setDiffEl(prices.diff);
+}
 
-      if (st.sec !== nowSec) {
-        st.base = n;
-        st.sec = nowSec;
-      }
-      priceTrend[trendKey] = st;
-    }
+function setPriceArrow(elId, val, key) {
+  const el = $(elId);
+  const n = maybeNum(val);
+  if (n === null) { el.textContent="-"; el.className="metric-value metric-value-sm"; priceTrend[key]={base:null,sec:0}; return; }
+  const now = Math.floor(Date.now()/1000);
+  const st = priceTrend[key]||{base:null,sec:0};
+  let arrow = "→", cls = "text-warn";
+  if (st.base !== null) { if (n>st.base) { arrow="↑"; cls="text-up"; } else if (n<st.base) { arrow="↓"; cls="text-down"; } }
+  el.textContent = fmtPrice(n)+" "+arrow;
+  el.className = "metric-value metric-value-sm "+cls;
+  if (st.sec !== now) { st.base = n; st.sec = now; }
+  priceTrend[key] = st;
+}
 
-    function setPctWithArrow(elId, pctVal, trendKey) {
-      const el = $(elId);
-      const n = maybeNum(pctVal);
-      if (n === null) {
-        el.textContent = "-";
-        el.className = "v";
-        priceTrend[trendKey] = { base: null, sec: 0 };
-        return;
-      }
+function setPctArrow(elId, val, key) {
+  const el = $(elId);
+  const n = maybeNum(val);
+  if (n === null) { el.textContent="-"; el.className="metric-value metric-value-sm"; priceTrend[key]={base:null,sec:0}; return; }
+  const now = Math.floor(Date.now()/1000);
+  const st = priceTrend[key]||{base:null,sec:0};
+  let arrow = "→", cls = "text-warn";
+  if (st.base !== null) { if (n>st.base) { arrow="↑"; cls="text-up"; } else if (n<st.base) { arrow="↓"; cls="text-down"; } }
+  el.textContent = fmtPct(n)+" "+arrow;
+  el.className = "metric-value metric-value-sm "+cls;
+  if (st.sec !== now) { st.base = n; st.sec = now; }
+  priceTrend[key] = st;
+}
 
-      const nowSec = Math.floor(Date.now() / 1000);
-      const st = priceTrend[trendKey] || { base: null, sec: 0 };
-      let arrow = "→";
-      let cls = "warn";
-      if (st.base !== null) {
-        if (n > st.base) {
-          arrow = "↑";
-          cls = "up";
-        } else if (n < st.base) {
-          arrow = "↓";
-          cls = "down";
-        }
-      }
+function setDiffEl(v) {
+  const el = $("mktDiff");
+  const n = maybeNum(v);
+  if (n === null) { el.textContent="-"; el.className="metric-value metric-value-sm"; return; }
+  el.textContent = (n>=0?"+":"")+fmt(n,0);
+  el.className = "metric-value metric-value-sm "+(n>0?"text-up":n<0?"text-down":"text-warn");
+}
 
-      el.textContent = `${fmtPct(n)} ${arrow}`;
-      el.className = `v ${cls}`;
+// ── 实时日志 ──
+let logSig = "";
+function renderLogs(items) {
+  const sig = JSON.stringify((items||[]).slice(-20));
+  if (sig === logSig) return;
+  logSig = sig;
+  const box = $("logsBox");
+  box.innerHTML = "";
+  const arr = Array.isArray(items) ? items : [];
+  $("logCount").textContent = "日志: "+arr.length;
+  for (const row of arr) {
+    const p = document.createElement("div");
+    p.className = "log-line log-"+(row.level||"INFO");
+    p.textContent = "["+(row.time||"--:--:--")+"] "+(row.message||"");
+    box.appendChild(p);
+  }
+  box.scrollTop = box.scrollHeight;
+}
 
-      if (st.sec !== nowSec) {
-        st.base = n;
-        st.sec = nowSec;
-      }
-      priceTrend[trendKey] = st;
-    }
+// ── SSE 流 ──
+function startSSE() {
+  if (!("EventSource" in window)) return;
+  try {
+    const es = new EventSource("/api/stream");
+    es.addEventListener("status", ev => {
+      try { const d = JSON.parse(ev.data||"{}"); if (d && d.data) renderMarket(d.data); } catch(e){}
+    });
+    es.addEventListener("logs", ev => {
+      try { const d = JSON.parse(ev.data||"{}"); if (d && d.items) renderLogs(d.items); } catch(e){}
+    });
+  } catch(_) {}
+}
 
-    function renderStatus(data) {
-      const market = data.market || {};
-      const prices = data.prices || {};
-      const redeem = data.auto_redeem || {};
-      latestMarket = market;
-      latestPrices = prices;
+// ── DB 数据轮询 ──
+async function pollDb() {
+  await Promise.all([fetchDbStats(), fetchDbAccount(), fetchDbTrades()]);
+  renderAllDb();
+}
 
-      if (data.btc_market_minutes !== undefined && data.btc_market_minutes !== null) {
-        const btcMin = Number(data.btc_market_minutes);
-        if (Number.isFinite(btcMin)) {
-          document.querySelectorAll(".interval-btn").forEach((b) => {
-            b.classList.toggle("active", Number(b.dataset.min) === btcMin);
-          });
-        }
-      }
+// ── 初始化 ──
+pollDb();
+setInterval(pollDb, 5000);
 
-      $("updatedAt").textContent = `更新: ${data.updated_at || "-"}`;
+startSSE();
 
-      const bal = data.wallet_balance;
-      $("walletBalance").textContent = bal !== undefined && bal !== null ? `余额: $${Number(bal).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : "余额: -";
-      $("marketSlug").textContent = `市场: ${market.slug || "-"}`;
-      const rem = maybeNum(market.remaining);
-      if (rem !== null && rem >= 0 && (market.status || "") === "active") {
-        remainingEndsAtMs = Date.now() + Math.round(rem * 1000);
-        $("remainingText").textContent = fmtRemainingSec(Math.floor(rem));
-      } else {
-        remainingEndsAtMs = null;
-        $("remainingText").textContent = market.remaining_text || "-";
-      }
-      $("marketStatus").textContent = market.status || "-";
-      $("priceUpdatedTs").textContent = prices.updated_ts ? String(prices.updated_ts) : "-";
+// Fallback HTTP polling for live data
+async function pollStatus() {
+  try {
+    const r = await fetch("/api/status", {cache:"no-store"});
+    if (r.ok) renderMarket(await r.json());
+  } catch(_) {}
+}
+async function pollLogs() {
+  try {
+    const r = await fetch("/api/logs", {cache:"no-store"});
+    if (r.ok) { const j = await r.json(); renderLogs((j&&j.items)||[]); }
+  } catch(_) {}
+}
+setInterval(pollStatus, 5000);
+setInterval(pollLogs, 2000);
 
-      $("ptb").textContent = fmtPrice(prices.ptb);
-      setPriceWithArrow("chainlink", prices.chainlink_btc, "chainlink");
-      setPriceWithArrow("binance", prices.binance_btc, "binance");
-      setPctWithArrow("upPrice", prices.up_price, "up");
-      setPctWithArrow("downPrice", prices.down_price, "down");
-      setDiff(prices.diff);
-
-      const localPos = fmtPosition(data.position);
-      const walletPos = fmtWalletPositions(data.wallet_positions);
-      $("position").textContent = localPos !== "-" ? localPos : (walletPos !== "-" ? `钱包同步: ${walletPos}` : "-");
-      const pendingText = fmtPending(data.pending_order, market.slug || "");
-      $("pendingOrder").textContent = pendingText;
-      const hasCrossMarketPending = pendingText === "-" && data.pending_order && Object.keys(data.pending_order).length > 0;
-      $("lastOrder").textContent = hasCrossMarketPending ? `跨市订单 | ${fmtPendingAny(data.pending_order)}` : fmtLast(data.last_order);
-
-      const enabled = !!redeem.enabled;
-      $("redeemEnabled").textContent = enabled ? "开启" : "关闭";
-      $("redeemEnabled").className = `v ${enabled ? "up" : "warn"}`;
-      $("redeemPending").textContent = String(redeem.pending_count ?? "-");
-      $("redeemClaimable").textContent = String(redeem.claimable_count ?? "-");
-      $("redeemResult").textContent = `上次结果: ${redeem.last_result ? JSON.stringify(redeem.last_result) : "-"}`;
-      $("redeemError").textContent = `上次错误: ${redeem.last_error || "-"}`;
-
-      const tip = $("manualTip");
-      if (tip) {
-        if (!market.slug) {
-          tip.textContent = "注意：无活跃市场，手动交易已禁用。";
-        } else {
-          tip.textContent = `注意：活跃市场 ${market.slug} — 可进行手动买入/卖出。`;
-        }
-      }
-
-      const rp = maybeNum(data.live_realized_pnl);
-      const up = maybeNum(data.live_unrealized_pnl);
-      const tp = maybeNum(data.live_total_pnl);
-      const rpEl = $("pnlRealized");
-      const upEl = $("pnlUnrealized");
-      const tpEl = $("pnlTotal");
-      rpEl.textContent = fmtSignedMoney(rp, 3);
-      upEl.textContent = fmtSignedMoney(up, 3);
-      tpEl.textContent = fmtSignedMoney(tp, 3);
-      rpEl.className = `v ${rp === null ? "" : (rp >= 0 ? "up" : "down")}`;
-      upEl.className = `v ${up === null ? "" : (up >= 0 ? "up" : "down")}`;
-      tpEl.className = `v ${tp === null ? "" : (tp >= 0 ? "up" : "down")}`;
-
-      const liveTrades = Array.isArray(data.live_trades) ? data.live_trades : [];
-      const localHistory = Array.isArray(data.trade_history) ? data.trade_history : [];
-      const walletHistory = Array.isArray(data.wallet_history) ? data.wallet_history : [];
-      const historyRows = liveTrades.length ? liveTrades : (localHistory.length ? localHistory : walletHistory);
-      renderRoundResults(data.round_results, historyRows);
-      if (!historyRows.length) {
-        if (historySig !== "0") {
-          renderHistory([]);
-          historySig = "0";
-        }
-      } else {
-        const tail = historyRows[historyRows.length - 1] || {};
-        const sig = `${historyRows.length}|${tail.id || tail.time || tail.settle_time || tail.order_id || ""}|${tail.status || ""}|${tail.profit ?? tail.price ?? ""}`;
-        if (sig !== historySig) {
-          renderHistory(historyRows);
-          historySig = sig;
-        }
-      }
-    }
-
-    function normalizeProbInput(v) {
-      const n = Number(v);
-      if (!Number.isFinite(n)) return null;
-      if (n > 1) return n / 100;
-      return n;
-    }
-
-    function autoFillProbByOutcome() {
-      const outcome = $("manualOutcome").value;
-      const p = outcome === "UP" ? maybeNum(latestPrices.up_price) : maybeNum(latestPrices.down_price);
-      if (p === null) return;
-      $("manualProb").value = (p * 100).toFixed(2);
-    }
-
-    async function submitManualOrder(action, intent) {
-      const outcome = String($("manualOutcome").value || "").toUpperCase();
-      const amount = Number($("manualAmount").value);
-      const probRaw = (intent === "take_profit")
-        ? $("manualTpProb").value
-        : (intent === "stop_loss")
-          ? $("manualSlProb").value
-          : $("manualProb").value;
-      const probability = normalizeProbInput(probRaw);
-      const tip = $("manualTip");
-      const finalIntent = String(intent || "manual_panel");
-
-      if (!latestMarket || !latestMarket.slug) {
-        tip.textContent = "错误：无活跃市场。";
-        return;
-      }
-      if (!["UP", "DOWN"].includes(outcome)) {
-        tip.textContent = "错误：方向必须为 UP 或 DOWN。";
-        return;
-      }
-      if (action === "BUY" && (!Number.isFinite(amount) || amount <= 0)) {
-        tip.textContent = "错误：订单金额必须大于 0。";
-        return;
-      }
-      if (probability === null || probability < 0.01 || probability > 0.99) {
-        tip.textContent = finalIntent === "take_profit"
-          ? "错误：请输入有效的止盈水平 (1%–99%)。"
-          : (finalIntent === "stop_loss"
-            ? "错误：请输入有效的止损水平 (1%–99%)。"
-            : "错误：概率必须在 1% 到 99% 之间。");
-        return;
-      }
-
-      tip.textContent = `提交中: ${action} ${outcome} ...`;
-      try {
-        const r = await fetch("/api/manual-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action,
-            outcome,
-            amount,
-            probability,
-            intent: finalIntent,
-          }),
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) {
-          tip.textContent = `错误: ${j.error || r.status}`;
-          return;
-        }
-        if (action === "SELL") {
-          tip.textContent = `成功: ${j.intent || "manual"} ${j.outcome} 已提交, 数量 ${(Number(j.size)||0).toFixed(4)}, 订单 ${j.order_id}`;
-        } else {
-          tip.textContent = `成功: ${j.action} ${j.outcome} 已提交, 订单 ${j.order_id}`;
-        }
-      } catch (e) {
-        tip.textContent = `错误: ${String((e && e.message) || e)}`;
-      }
-    }
-
-    function renderHistory(items) {
-      const rows = Array.isArray(items) ? items : [];
-      const list = $("historyList");
-      $("historyCount").textContent = `记录: ${rows.length}`;
-      if (!rows.length) {
-        list.innerHTML = '<div class="history-item"><div class="history-main">暂无交易记录</div></div>';
-        return;
-      }
-      const latest = rows.slice(-40).reverse();
-      list.innerHTML = latest.map((x) => {
-        if (x && x.status === "AGG") {
-          const p = maybeNum(x.profit);
-          const pText = p === null ? "--" : `${p >= 0 ? "+" : "-"}$${Math.abs(p).toFixed(2)}`;
-          const d = x.direction || "-";
-          const fo = String(x.final_outcome || "-");
-          const rs = x.reason || "market";
-          const size = maybeNum(x.size);
-          const ec = maybeNum(x.buy_count);
-          const xc = maybeNum(x.sell_count);
-          const rc = maybeNum(x.redeem_count);
-          const t = x.settle_time || x.order_time || "-";
-          const bjt = fmtBeijingTime(t);
-          const cls = p === null ? "" : (p >= 0 ? "up" : "down");
-          const foCls = fo === "UP" ? "up" : (fo === "DOWN" ? "down" : "warn");
-          return `
-            <div class="history-item">
-              <div class="history-main">${t} | ${d} | 结果 <span class="${foCls}">${fo}</span> | <span class="${cls}">${pText}</span></div>
-              <div class="history-sub">${rs}${bjt !== "-" ? ` | CST ${bjt}` : ""} | 买入 ${ec ?? 0} 卖出 ${xc ?? 0} 赎回 ${rc ?? 0} | 数量 ${size === null ? "-" : size.toFixed(4)}</div>
-            </div>`;
-        }
-        const t = x.time || "-";
-        const action = x.action || "-";
-        const side = x.side || "-";
-        const st = x.status || "-";
-        const p = x.price !== undefined ? `${fmt(Number(x.price) * 100, 2)}%` : "-";
-        const amount = x.amount !== undefined ? `$${fmt(x.amount, 2)}` : "-";
-        const reason = x.reason || "-";
-        const oid = x.order_id || "-";
-        return `
-          <div class="history-item">
-              <div class="history-main">${t} | ${action} ${side} | ${st}</div>
-            <div class="history-sub">价格 ${p} | 金额 ${amount} | 原因 ${reason} | 订单 ${oid}</div>
-          </div>`;
-      }).join("");
-    }
-
-    function renderRoundResults(roundRows, fallbackRows) {
-      const source = Array.isArray(roundRows) ? roundRows : [];
-      const fb = Array.isArray(fallbackRows) ? fallbackRows : [];
-      let rounds = source.filter((x) => x && x.kind === "MARKET_ROUND");
-      if (!rounds.length) {
-        rounds = fb.filter((x) => x && x.status === "AGG").map((x) => ({
-          kind: "MARKET_ROUND",
-          slug: x.market_slug || x.slug || x.reason || "",
-          start: x.order_time || "",
-          end: x.settle_time || "",
-          time: x.settle_time || x.order_time || "-",
-          status: x.result === "OPEN" ? "settling" : "resolved",
-          entry_side: x.direction || "-",
-          final_outcome: x.final_outcome || x.result || "-",
-          final_diff: maybeNum(x.final_diff ?? x.diff),
-          profit: x.profit,
-          direction: x.direction || "-",
-        }));
-      }
-
-      // Win rate from settled rows: profit>0 => win, else loss
-      const settled = fb.filter((x) => x && x.status === "AGG" && String(x.result || "").toUpperCase() !== "OPEN");
-      const judgedProfit = settled.map((x) => maybeNum(x.profit)).filter((v) => v !== null);
-      const winsByProfit = judgedProfit.filter((v) => v > 0).length;
-      const lossesByProfit = judgedProfit.filter((v) => v <= 0).length;
-      const totalJudged = winsByProfit + lossesByProfit;
-      const winRate = totalJudged > 0 ? `${((winsByProfit / totalJudged) * 100).toFixed(1)}%` : "-";
-      if (totalJudged > 0) {
-        const losses = lossesByProfit;
-        $("winRate").innerHTML = `${winRate} (<span class="up">${winsByProfit}</span>/<span class="down">${losses}</span>/<span class="warn">${totalJudged}</span>)`;
-        $("winRate").className = "v";
-      } else {
-        $("winRate").textContent = "-";
-        $("winRate").className = "v";
-      }
-
-      const box = $("roundResultList");
-      if (!rounds.length) {
-        $("winRate").textContent = "-";
-        $("winRate").className = "v";
-        box.innerHTML = '<div class="round-item">暂无轮次结果</div>';
-        return;
-      }
-
-      // Newest first; keep at most 100
-      const toTs = (x) => {
-        const v = (x && (x.end || x.time || x.start)) ? String(x.end || x.time || x.start) : "";
-        const t = Date.parse(v);
-        return Number.isFinite(t) ? t : 0;
-      };
-
-      let latest = rounds.slice(0).sort((a, b) => toTs(b) - toTs(a));
-      if (latest.length > 100) {
-        latest = latest.slice(0, 100);
-      }
-
-      $("roundCount").textContent = `轮次: ${rounds.length}`;
-      const sig = JSON.stringify(latest.map((x) => [x.slug || "", x.time || "", x.entry_side || "", x.final_outcome || "", x.status || "", x.final_diff ?? "", x.profit ?? "", x.skip_reason || ""]));
-      if (sig === roundSig) return;
-      roundSig = sig;
-
-      box.innerHTML = latest.map((x) => {
-        const marketText = fmtBeijingMarketText(x.start, x.end, x.slug);
-        const buySide = String(x.entry_side || "-").toUpperCase();
-        const fo = String(x.final_outcome || x.result || "-");
-        const foNorm = fo.toUpperCase();
-        const status = String(x.status || "-");
-        const finalDiff = maybeNum(x.final_diff ?? x.last_diff);
-        const diffText = finalDiff === null
-          ? "N/A"
-          : `${finalDiff >= 0 ? "+" : ""}${(Math.abs(finalDiff) >= 10 ? finalDiff.toFixed(0) : finalDiff.toFixed(2))}`;
-        const diffCls = finalDiff === null ? "warn" : (finalDiff >= 0 ? "up" : "down");
-        const p = maybeNum(x.profit);
-        const pText = p === null ? "" : ` | ${p >= 0 ? "+" : "-"}$${Math.abs(p).toFixed(2)}`;
-        const cls = p === null ? "warn" : (p >= 0 ? "up" : "down");
-        const foCls = fo === "UP" ? "up" : (fo === "DOWN" ? "down" : "warn");
-        const sideCls = buySide === "UP" ? "up" : (buySide === "DOWN" ? "down" : "warn");
-        const verdict = p !== null
-          ? (p > 0 ? "赢" : "亏")
-          : ((buySide === "UP" || buySide === "DOWN") && (foNorm === "UP" || foNorm === "DOWN") && status === "resolved"
-            ? (buySide === foNorm ? "赢" : "亏")
-            : "-");
-        const verdictCls = verdict === "赢" ? "up" : (verdict === "亏" ? "down" : "warn");
-        const stText = status === "active" ? "活跃" : (status === "settling" ? "结算中" : (status === "resolved" ? "已解决" : status));
-        const skip = String(x.skip_reason || "").trim();
-        const skipText = skip ? ` | 跳过: ${skip}` : "";
-        return `<div class="round-item">${marketText} | 买入 <span class="${sideCls}">${buySide}</span> | 状态 ${stText} | 结果 <span class="${foCls}">${fo}</span> | 判定 <span class="${verdictCls}">${verdict}</span> | 最终价差 <span class="${diffCls}">${diffText}</span>${pText ? ` | <span class="${cls}">${pText.slice(3)}</span>` : ""}${skipText}</div>`;
-      }).join("");
-    }
-
-    function renderLogs(items) {
-      const sig = JSON.stringify(items.slice(-20));
-      if (sig === logSig) return;
-      logSig = sig;
-      const box = $("logs");
-      box.innerHTML = "";
-      for (const row of items) {
-        const p = document.createElement("p");
-        p.className = `log log-${row.level || "INFO"}`;
-        p.textContent = `[${row.time || "--:--:--"}] ${row.message || ""}`;
-        box.appendChild(p);
-      }
-      box.scrollTop = box.scrollHeight;
-    }
-
-    async function pollStatus() {
-      try {
-        const r = await fetch("/api/status", { cache: "no-store" });
-        if (!r.ok) return;
-        renderStatus(await r.json());
-      } catch (_) {}
-    }
-
-    async function pollLogs() {
-      try {
-        const r = await fetch("/api/logs", { cache: "no-store" });
-        if (!r.ok) return;
-        const j = await r.json();
-        renderLogs((j && j.items) || []);
-      } catch (_) {}
-    }
-
-    function startLiveStream() {
-      if (!("EventSource" in window)) return false;
-      try {
-        const es = new EventSource("/api/stream");
-        es.addEventListener("status", (ev) => {
-          try {
-            const j = JSON.parse(ev.data || "{}");
-            renderStatus((j && j.data) || {});
-          } catch (_) {}
-        });
-        es.addEventListener("logs", (ev) => {
-          try {
-            const j = JSON.parse(ev.data || "{}");
-            renderLogs((j && j.items) || []);
-          } catch (_) {}
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    function enhanceCards() {
-      document.querySelectorAll('.card').forEach((card, idx) => {
-        const h3 = card.querySelector(':scope > h3');
-        if (!h3 || card.dataset.enhanced === '1') return;
-        const head = document.createElement('div');
-        head.className = 'card-head';
-        const tools = document.createElement('div');
-        tools.className = 'card-tools';
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'mini-btn';
-        btn.textContent = '折叠';
-        btn.addEventListener('click', () => {
-          const collapsed = card.classList.toggle('collapsed');
-          Array.from(card.children).forEach((el) => {
-            if (el !== head) el.style.display = collapsed ? 'none' : '';
-          });
-          btn.textContent = collapsed ? '展开' : '折叠';
-          h3.style.display = '';
-          head.style.display = '';
-        });
-        tools.appendChild(btn);
-        h3.parentNode.insertBefore(head, h3);
-        head.appendChild(h3);
-        head.appendChild(tools);
-        card.dataset.enhanced = '1';
+// 周期切换
+document.querySelectorAll(".interval-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const m = Number(btn.dataset.min);
+    if (!Number.isFinite(m)) return;
+    document.querySelectorAll(".interval-btn").forEach(b => b.disabled = true);
+    try {
+      const r = await fetch("/api/btc-market-minutes", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({minutes:m})
       });
+      if (r.ok) pollStatus();
+    } catch(_) {} finally {
+      document.querySelectorAll(".interval-btn").forEach(b => b.disabled = false);
     }
-
-    function bindQuickAmounts(){
-      document.querySelectorAll('#quickAmounts .chip').forEach(btn=>{
-        btn.addEventListener('click',()=>{
-          const v = Number(btn.dataset.amt || 5);
-          $('manualAmount').value = String(v);
-        });
-      });
-    }
-
-    function bindBtcMarketInterval() {
-      document.querySelectorAll(".interval-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const m = Number(btn.dataset.min);
-          if (!Number.isFinite(m)) return;
-          document.querySelectorAll(".interval-btn").forEach((b) => { b.disabled = true; });
-          try {
-            const r = await fetch("/api/btc-market-minutes", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ minutes: m }),
-            });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok || !j.ok) {
-              console.warn("btc-market-minutes:", j.error || r.status);
-            } else {
-              pollStatus();
-            }
-          } catch (e) {
-            console.warn(e);
-          } finally {
-            document.querySelectorAll(".interval-btn").forEach((b) => { b.disabled = false; });
-          }
-        });
-      });
-    }
-
-    enhanceCards();
-    bindQuickAmounts();
-    bindBtcMarketInterval();
-
-    pollStatus();
-    pollLogs();
-    $("manualOutcome").addEventListener("change", autoFillProbByOutcome);
-    $("manualBuyBtn").addEventListener("click", () => submitManualOrder("BUY", "manual_panel"));
-    $("manualSellBtn").addEventListener("click", () => submitManualOrder("SELL", "manual_panel"));
-    $("manualTpBtn").addEventListener("click", () => submitManualOrder("SELL", "take_profit"));
-    $("manualSlBtn").addEventListener("click", () => submitManualOrder("SELL", "stop_loss"));
-    setInterval(pollStatus, 500);
-    setInterval(pollLogs, 1000);
-  </script>
+  });
+});
+</script>
 </body>
 </html>

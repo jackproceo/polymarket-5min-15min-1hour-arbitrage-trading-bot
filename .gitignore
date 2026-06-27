@@ -114,9 +114,15 @@ Thumbs.db
 
 # Markdown exemptions
 *.md
-!服务器docker部署说明.md
 !README.md
 !**/README.md
 !**/readme_cn.md
 !**/CONFIG.md
-!git更新与服务器部署流程.md
+*.md
+
+
+*.rar
+jack*.txt
+jack*.log
+
+/==bak/

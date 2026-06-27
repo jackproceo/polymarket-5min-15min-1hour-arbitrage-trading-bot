@@ -53,6 +53,7 @@
 - **自动赎回：** 可选的 Polymarket **Builder** relayer 流程用于获胜头寸。
 - **仪表板：** 浏览器 UI，显示余额、持仓、历史记录、日志以及 **5m / 15m** 切换。
 - **结构化日志：** `TRADING_ANALYSIS_LOG`（默认 `trading_analysis.jsonl`）——JSON Lines 格式，`schema_version: 2`，用于研究和复盘。
+- **SQLite 数据库：** 所有交易和账户快照持久化存储在 `data/trading.db`；仪表板以数据库为主要数据源读取。
 
 ---
 
@@ -81,7 +82,7 @@
 - `BTC_MARKET_MINUTES` — `5` 或 `15`（选择 Polymarket BTC 窗口）。PTB 使用 Polymarket 的加密货币价格 API，结合 Gamma 的事件起止时间（两个周期均使用 `variant=fifteen`，使 PTB 与网站匹配）。
 - `AUTO_TRADE` — `true` / `false`（实盘订单；模拟模式处理下单时忽略此项）。
 - `SIMULATION_MODE` — `true` / `false`。模拟模式：**无** CLOB 订单 / 自动赎回；盈亏记录在 `state.json` 中。
-- `TRADING_ANALYSIS_LOG` — 可选路径；默认为 `polymarket_auto_trade.py` 旁边的 `trading_analysis.jsonl`。相对路径从该脚本所在目录解析。每行为 JSON，包含稳定键：`slug`、`shares_type`（UP/DOWN）、`share_price`、`share_amount`、`ptb`、`btc_price`、`difference`（BTC−PTB USD）、`status`、`take_profit` / `stop_loss`、`time`、`pnl_trade_usd`、`pnl_total_usd`、`simulation` 等。
+- `TRADING_ANALYSIS_LOG` — 可选路径；默认为 `main.py` 旁边的 `trading_analysis.jsonl`。相对路径从该脚本所在目录解析。每行为 JSON，包含稳定键：`slug`、`shares_type`（UP/DOWN）、`share_price`、`share_amount`、`ptb`、`btc_price`、`difference`（BTC−PTB USD）、`status`、`take_profit` / `stop_loss`、`time`、`pnl_trade_usd`、`pnl_total_usd`、`simulation` 等。
 - `TRADE_AMOUNT` — 每笔买入的 USDC 金额。
 
 ### 触发条件
@@ -99,7 +100,7 @@
 ## 运行
 
 ```bash
-python polymarket_auto_trade.py
+python main.py
 ```
 
 使用仪表板的 **Market 5m / 15m** 切换按钮或 `config.env` 中的 `BTC_MARKET_MINUTES` 来切换周期。
@@ -110,7 +111,7 @@ python polymarket_auto_trade.py
 
 默认地址：**http://localhost:5080**（如果绑定了外部 IP，则为 `http://<你的IP>:5080`）。
 
-包含余额、实时价格、手动交易面板、历史记录、周期汇总和日志流。
+包含余额、实时价格、交易历史记录（来自 SQLite）、账户概览、周期汇总和实时日志流。
 
 ---
 
@@ -118,9 +119,17 @@ python polymarket_auto_trade.py
 
 | 路径 | 作用 |
 |------|------|
-| `polymarket_auto_trade.py` | 主循环、数据馈送、规则、订单、仪表板服务器 |
+| `main.py` | 入口点 — 编排交易循环、仪表板和 feeds |
+| `trader.py` | 核心交易逻辑、规则引擎、下单 |
+| `dashboard.py` | Flask HTTP 路由、SSE 流、DB API |
+| `database.py` | SQLite ORM — trades + account_snapshots 表 |
+| `websocket_feeds.py` | Binance & Polymarket CLOB WebSocket Feeds |
+| `state.py` | 全局状态、价格缓存、Flask 应用实例 |
+| `config.py` | config.env 加载和类型化访问器 |
+| `utils.py` | 工具函数（BTC 市场、价格辅助等） |
 | `config.env` | 密钥和交易开关（在你的 fork 中**加入 gitignore**） |
-| `static/dashboard.html` | 仪表板 UI |
+| `static/dashboard.html` | 仪表板 UI（主要从 SQLite 通过 REST 读取） |
+| `data/trading.db` | SQLite 数据库 — 持久化交易和账户记录 |
 | `state.json` | 持久化的运行时/模拟盈亏状态 |
 | `trading_analysis.jsonl` | 仅追加的分析日志（可选路径） |
 

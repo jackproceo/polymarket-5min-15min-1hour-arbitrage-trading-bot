@@ -26,10 +26,13 @@ git push
 
 ## 二、服务器拉取并重建容器
 
+
 ```bash
 # 1. SSH 登录到服务器后，进入项目目录
 cd /opt/polymarket-5min-15min-1hour-arbitrage-trading-bot
 
+# 1. 暂存未提交的改动
+git stash
 # 2. 拉取最新代码
 git pull
 

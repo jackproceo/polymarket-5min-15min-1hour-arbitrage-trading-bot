@@ -1,0 +1,21 @@
+services:
+  bot-ptb:
+    build: .
+    container_name: polymarket-bot-ptb2
+    restart: unless-stopped
+    ports:
+      - "24029:5080"
+    env_file:
+      - config.env
+    volumes:
+      - ./data/state.json:/app/state.json
+      - ./data/trading_analysis.jsonl:/app/trading_analysis.jsonl
+      - ./data/trading.db:/app/data/trading.db
+      - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5080/', timeout=5)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

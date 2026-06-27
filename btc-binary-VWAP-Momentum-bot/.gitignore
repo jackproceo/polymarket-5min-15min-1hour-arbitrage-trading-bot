@@ -36,3 +36,5 @@ backtest_data/
 
 # Charts and images (generated at runtime)
 *.png
+config.json
+*.md

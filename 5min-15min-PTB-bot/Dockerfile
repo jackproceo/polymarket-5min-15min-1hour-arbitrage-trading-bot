@@ -43,4 +43,4 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
 
 # WEB_HOST defaults to 0.0.0.0, WEB_PORT defaults to 5080.
 # Override via config.env or environment variables.
-CMD ["python3", "polymarket_auto_trade.py"]
+CMD ["python3", "main.py"]

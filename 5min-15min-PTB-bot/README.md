@@ -53,6 +53,7 @@ A Python bot for Polymarket **BTC Up/Down** markets in **5-minute** or **15-minu
 - **Auto redeem:** Optional Polymarket **Builder** relayer flow for winning positions.
 - **Dashboard:** Browser UI for balance, positions, history, logs, and **5m / 15m** toggle.
 - **Structured logging:** `TRADING_ANALYSIS_LOG` (default `trading_analysis.jsonl`) — JSON Lines with `schema_version: 2` for research and replay.
+- **SQLite database:** All trades and account snapshots persisted in `data/trading.db`; dashboard reads from DB as primary source.
 
 ---
 
@@ -81,7 +82,7 @@ A Python bot for Polymarket **BTC Up/Down** markets in **5-minute** or **15-minu
 - `BTC_MARKET_MINUTES` — `5` or `15` (which Polymarket BTC window). PTB uses Polymarket’s crypto-price API with event start/end from Gamma (`variant=fifteen` for both intervals so PTB matches the site).
 - `AUTO_TRADE` — `true` / `false` (live orders; ignored when simulation handles placement).
 - `SIMULATION_MODE` — `true` / `false`. Paper mode: **no** CLOB orders / auto-redeem; PnL tracked in `state.json`.
-- `TRADING_ANALYSIS_LOG` — optional path; default `trading_analysis.jsonl` next to `polymarket_auto_trade.py`. Relative paths resolve from that script’s directory. Each line is JSON with stable keys: `slug`, `shares_type` (UP/DOWN), `share_price`, `share_amount`, `ptb`, `btc_price`, `difference` (BTC−PTB USD), `status`, `take_profit` / `stop_loss`, `time`, `pnl_trade_usd`, `pnl_total_usd`, `simulation`, etc.
+- `TRADING_ANALYSIS_LOG` — optional path; default `trading_analysis.jsonl` next to `main.py`. Relative paths resolve from that script’s directory. Each line is JSON with stable keys: `slug`, `shares_type` (UP/DOWN), `share_price`, `share_amount`, `ptb`, `btc_price`, `difference` (BTC−PTB USD), `status`, `take_profit` / `stop_loss`, `time`, `pnl_trade_usd`, `pnl_total_usd`, `simulation`, etc.
 - `TRADE_AMOUNT` — USDC per buy.
 
 ### Triggers
@@ -99,7 +100,7 @@ A Python bot for Polymarket **BTC Up/Down** markets in **5-minute** or **15-minu
 ## Run
 
 ```bash
-python polymarket_auto_trade.py
+python main.py
 ```
 
 Use the dashboard **Market 5m / 15m** toggle or `BTC_MARKET_MINUTES` in `config.env` to switch horizons.
@@ -110,7 +111,7 @@ Use the dashboard **Market 5m / 15m** toggle or `BTC_MARKET_MINUTES` in `config.
 
 Default: **http://localhost:5080** (or `http://<your-ip>:5080` if bound externally).
 
-Includes balances, live prices, manual trading panel, history, round summary, and log stream.
+Includes balances, live prices, trade history (from SQLite), account overview, round summary, and real-time log stream.
 
 ---
 
@@ -118,9 +119,17 @@ Includes balances, live prices, manual trading panel, history, round summary, an
 
 | Path | Role |
 |------|------|
-| `polymarket_auto_trade.py` | Main loop, feeds, rules, orders, dashboard server |
+| `main.py` | Entry point — orchestrates trading loop, dashboard, and feeds |
+| `trader.py` | Core trading logic, rules engine, order placement |
+| `dashboard.py` | Flask HTTP routes, SSE streaming, DB API |
+| `database.py` | SQLite ORM — trades + account_snapshots tables |
+| `websocket_feeds.py` | Binance & Polymarket CLOB WebSocket feeds |
+| `state.py` | Global state, price cache, Flask app instance |
+| `config.py` | Config.env loader and typed accessors |
+| `utils.py` | Utility functions (BTC market, price helpers, etc.) |
 | `config.env` | Secrets and trading switches (**gitignore** in your fork) |
-| `static/dashboard.html` | Dashboard UI |
+| `static/dashboard.html` | Dashboard UI (reads primarily from SQLite via REST) |
+| `data/trading.db` | SQLite database — persistent trade & account records |
 | `state.json` | Persisted runtime / simulation PnL state |
 | `trading_analysis.jsonl` | Append-only analysis log (optional path) |
 
