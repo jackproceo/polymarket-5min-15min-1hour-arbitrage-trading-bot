@@ -432,7 +432,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
           var slug=hdr.slug!=null?String(hdr.slug):"\u2014";
           var ts="";
           if(d.ts)ts=new Date(d.ts*1000).toISOString();
-          document.getElementById("meta").innerHTML=esc(slug)+" \u00b7 "+esc(ts);
+          document.getElementById("meta").innerHTML=esc(slug)+' <a href="https://polymarket.com/event/'+esc(slug)+'" target="_blank" rel="noopener" style="font-size:0.8rem;">查看 \u2197</a> \u00b7 '+esc(ts);
           document.getElementById("session").innerHTML=[
             "计时器: "+(hdr.time_left_sec!=null?esc(Math.floor(hdr.time_left_sec)+"秒剩余"):"\u2014"),
             "WS: "+(hdr.ws_connected?"已连接":"已断开"),

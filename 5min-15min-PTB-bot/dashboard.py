@@ -11,7 +11,7 @@ from flask import Response, jsonify, request, send_from_directory, stream_with_c
 from config import WEB_ENABLED, WEB_HOST, WEB_PORT, STATIC_DIR, DASHBOARD_PASSWORD
 from state import app, dashboard_lock, dashboard_cond, dashboard_state, dashboard_version
 from utils import set_btc_market_minutes, get_btc_market_minutes
-from database import get_trade_stats, get_recent_trades, get_latest_account_snapshot, get_account_history
+from database import get_trade_stats, get_recent_trades, get_latest_account_snapshot, get_account_history, _get_conn
 
 
 def _check_pwd():
@@ -178,6 +178,112 @@ def api_db_account_history():
     limit = request.args.get("limit", 50, type=int)
     rows = get_account_history(limit)
     return jsonify({"items": [dict(r) for r in rows]})
+
+
+@app.route("/api/db/stats/detail")
+def api_db_stats_detail():
+    """返回详细的多维统计数据。"""
+    err = _require_pwd()
+    if err:
+        return err
+    conn = _get_conn()
+    result = {}
+
+    # 按平仓原因分组
+    rows = conn.execute("""
+        SELECT open_reason, COUNT(*) as cnt,
+               COALESCE(SUM(pnl_usd),0) as total_pnl,
+               COALESCE(AVG(pnl_usd),0) as avg_pnl,
+               COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+               COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL'
+        GROUP BY open_reason ORDER BY cnt DESC
+    """).fetchall()
+    result["by_reason"] = [dict(r) for r in rows]
+
+    # 按方向分组
+    rows = conn.execute("""
+        SELECT side, COUNT(*) as cnt,
+               COALESCE(SUM(pnl_usd),0) as total_pnl,
+               COALESCE(AVG(pnl_usd),0) as avg_pnl,
+               COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+               COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL'
+        GROUP BY side ORDER BY cnt DESC
+    """).fetchall()
+    result["by_side"] = [dict(r) for r in rows]
+
+    # 按市场周期分组
+    rows = conn.execute("""
+        SELECT btc_market_minutes, COUNT(*) as cnt,
+               COALESCE(SUM(pnl_usd),0) as total_pnl,
+               COALESCE(AVG(pnl_usd),0) as avg_pnl,
+               COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+               COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL'
+        GROUP BY btc_market_minutes ORDER BY cnt DESC
+    """).fetchall()
+    result["by_minutes"] = [dict(r) for r in rows]
+
+    # 按入场价格区间分组
+    rows = conn.execute("""
+        SELECT 
+            CASE 
+                WHEN entry_price < 0.5 THEN '0-50%'
+                WHEN entry_price < 0.6 THEN '50-60%'
+                WHEN entry_price < 0.7 THEN '60-70%'
+                WHEN entry_price < 0.8 THEN '70-80%'
+                WHEN entry_price < 0.9 THEN '80-90%'
+                ELSE '90-100%'
+            END as price_range,
+            COUNT(*) as cnt,
+            COALESCE(SUM(pnl_usd),0) as total_pnl,
+            COALESCE(AVG(pnl_usd),0) as avg_pnl,
+            COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+            COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL' AND entry_price IS NOT NULL
+        GROUP BY price_range ORDER BY price_range
+    """).fetchall()
+    result["by_entry_price"] = [dict(r) for r in rows]
+
+    # 按差价区间分组
+    rows = conn.execute("""
+        SELECT 
+            CASE 
+                WHEN diff_at_trade IS NULL THEN 'N/A'
+                WHEN diff_at_trade < 0 THEN 'BTC<PTB'
+                WHEN diff_at_trade < 40 THEN '0-40'
+                WHEN diff_at_trade < 80 THEN '40-80'
+                ELSE '80+'
+            END as diff_range,
+            COUNT(*) as cnt,
+            COALESCE(SUM(pnl_usd),0) as total_pnl,
+            COALESCE(AVG(pnl_usd),0) as avg_pnl,
+            COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+            COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL'
+        GROUP BY diff_range ORDER BY diff_range
+    """).fetchall()
+    result["by_diff"] = [dict(r) for r in rows]
+
+    # 按日期分组
+    rows = conn.execute("""
+        SELECT substr(created_at,1,10) as day,
+               COUNT(*) as cnt,
+               COALESCE(SUM(pnl_usd),0) as total_pnl,
+               COALESCE(AVG(pnl_usd),0) as avg_pnl,
+               COALESCE(SUM(CASE WHEN result='win' THEN 1 ELSE 0 END),0) as wins,
+               COALESCE(SUM(CASE WHEN result='loss' THEN 1 ELSE 0 END),0) as losses
+        FROM trades WHERE action='SELL'
+        GROUP BY day ORDER BY day DESC
+    """).fetchall()
+    result["by_day"] = [dict(r) for r in rows]
+
+    # BUY 操作记录数（开仓频率）
+    buy_cnt = conn.execute("SELECT COUNT(*) as cnt FROM trades WHERE action='BUY'").fetchone()
+    result["total_buys"] = buy_cnt["cnt"] if buy_cnt else 0
+
+    return jsonify(result)
 
 
 def start_web_server():

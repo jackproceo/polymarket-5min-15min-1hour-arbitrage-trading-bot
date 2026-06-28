@@ -444,6 +444,7 @@
   <nav class="page-nav" id="pageNav">
     <button type="button" class="page-nav-btn active" data-page="home">首页</button>
     <button type="button" class="page-nav-btn" data-page="trades">交易记录</button>
+    <button type="button" class="page-nav-btn" data-page="stats">统计分析</button>
     <button type="button" class="page-nav-btn" data-page="balance">余额变动</button>
   </nav>
 
@@ -630,6 +631,77 @@
       </div>
     </section>
   </div>
+
+  <!-- ======== 统计分析页 ======== -->
+  <div id="page-stats" class="page">
+
+    <!-- 概览条 -->
+    <div class="summary-bar">
+      <span class="summary-item">总交易: <strong id="sfTotal">-</strong></span>
+      <span class="summary-item">胜率: <strong id="sfWinRate">-</strong></span>
+      <span class="summary-item">总盈亏: <strong id="sfTotalPnl">-</strong></span>
+      <span class="summary-item">平均盈亏: <strong id="sfAvgPnl">-</strong></span>
+      <span class="summary-item">总开仓: <strong id="sfTotalBuys">-</strong></span>
+    </div>
+
+    <!-- 第一行：按方向 + 按原因 -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <!-- 按方向 -->
+      <section class="card">
+        <div class="card-header"><span class="card-title">按方向统计</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>方向</th><th>笔数</th><th>总盈亏</th><th>平均盈亏</th><th>胜</th><th>负</th><th>胜率</th></tr></thead>
+            <tbody id="sfBySide"></tbody>
+          </table>
+        </div>
+      </section>
+      <!-- 按原因 -->
+      <section class="card">
+        <div class="card-header"><span class="card-title">按平仓原因统计</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>原因</th><th>笔数</th><th>总盈亏</th><th>平均盈亏</th><th>胜</th><th>负</th><th>胜率</th></tr></thead>
+            <tbody id="sfByReason"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 第二行：按入场价格 + 按差价 -->
+    <div class="grid-2" style="margin-bottom:16px">
+      <section class="card">
+        <div class="card-header"><span class="card-title">按入场价格区间统计</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>入场概率</th><th>笔数</th><th>总盈亏</th><th>平均盈亏</th><th>胜</th><th>负</th><th>胜率</th></tr></thead>
+            <tbody id="sfByEntryPrice"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card">
+        <div class="card-header"><span class="card-title">按价差区间统计</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>价差(BTC-PTB)</th><th>笔数</th><th>总盈亏</th><th>平均盈亏</th><th>胜</th><th>负</th><th>胜率</th></tr></thead>
+            <tbody id="sfByDiff"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 第三行：按日期 -->
+    <section class="card">
+      <div class="card-header"><span class="card-title">按日期统计</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>笔数</th><th>总盈亏</th><th>平均盈亏</th><th>胜</th><th>负</th><th>胜率</th></tr></thead>
+          <tbody id="sfByDay"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </div> <!-- /page-stats -->
 
   <!-- ======== 余额变动页 ======== -->
   <div id="page-balance" class="page">
@@ -971,6 +1043,7 @@ function switchPage(pageId) {
     b.classList.toggle("active", b.dataset.page === pageId);
   });
   if (pageId === "trades") renderTradeHistory();
+  if (pageId === "stats") { fetchStatsDetail().then(renderStatsDetail); }
   if (pageId === "balance") renderBalanceHistory();
 }
 document.getElementById("pageNav").addEventListener("click", e => {
@@ -1003,10 +1076,12 @@ function renderTradeHistory() {
 
   $("thTotal").textContent = rows.length;
   $("thTotalPnl").textContent = fmtSigned(totalPnl, 3);
-  $("thTotalPnl").className = "summary-item";
+  $("thTotalPnl").className = "summary-item " + clsPnl(totalPnl);
   $("thWinRate").textContent = rows.length ? (wins / (wins + losses || 1) * 100).toFixed(1) + "%" : "-";
   $("thMaxWin").textContent = fmtSigned(maxWin, 3);
+  $("thMaxWin").className = "summary-item " + clsPnl(maxWin);
   $("thMaxLoss").textContent = fmtSigned(maxLoss, 3);
+  $("thMaxLoss").className = "summary-item " + clsPnl(maxLoss);
 
   $("thCount").textContent = "记录: " + rows.length;
   const tbody = $("thBody");
@@ -1080,8 +1155,12 @@ function renderBalanceHistory() {
     const l = rows[0];
     $("bhBalance").textContent = maybeNum(l.balance) !== null ? "$"+fmt(l.balance,2) : "-";
     $("bhEquity").textContent = maybeNum(l.total_equity) !== null ? "$"+fmt(l.total_equity,2) : "-";
-    $("bhRealizedPnl").textContent = fmtSigned(maybeNum(l.realized_pnl), 3);
-    $("bhCumPnl").textContent = fmtSigned(maybeNum(l.cumulative_pnl), 3);
+    const rp = maybeNum(l.realized_pnl);
+    $("bhRealizedPnl").textContent = fmtSigned(rp, 3);
+    $("bhRealizedPnl").className = "summary-item " + clsPnl(rp);
+    const cp = maybeNum(l.cumulative_pnl);
+    $("bhCumPnl").textContent = fmtSigned(cp, 3);
+    $("bhCumPnl").className = "summary-item " + clsPnl(cp);
     $("bhPositions").textContent = l.open_positions_count != null ? l.open_positions_count : "-";
   }
 
@@ -1113,6 +1192,82 @@ function renderBalanceHistory() {
   }).join("");
 }
 
+// ── 统计详情页数据 ──
+let statsDetail = null;
+
+async function fetchStatsDetail() {
+  try {
+    const r = await authFetch("/api/db/stats/detail");
+    if (r.ok) statsDetail = await r.json();
+  } catch(_) {}
+}
+
+function winRate(w, l) {
+  const t = (w||0) + (l||0);
+  return t > 0 ? (w / t * 100).toFixed(1) + "%" : "-";
+}
+
+function renderStatsRow(name, d) {
+  const cnt = d.cnt || 0;
+  const tp = maybeNum(d.total_pnl);
+  const ap = maybeNum(d.avg_pnl);
+  const w = d.wins || 0;
+  const l = d.losses || 0;
+  return `<tr>
+    <td>${name}</td>
+    <td>${cnt}</td>
+    <td class="${clsPnl(tp)}">${fmtSigned(tp,3)}</td>
+    <td class="${clsPnl(ap)}">${fmtSigned(ap,3)}</td>
+    <td class="text-up">${w}</td>
+    <td class="text-down">${l}</td>
+    <td>${winRate(w,l)}</td>
+  </tr>`;
+}
+
+function renderStatsDetail() {
+  const s = statsDetail || {};
+  const sellStats = (s.by_reason||[]).reduce((a,r) => ({total:(a.total||0)+r.cnt, wins:(a.wins||0)+r.wins, losses:(a.losses||0)+r.losses, pnl: (a.pnl||0)+maybeNum(r.total_pnl)}), {total:0,wins:0,losses:0,pnl:0});
+
+  $("sfTotal").textContent = sellStats.total;
+  $("sfWinRate").textContent = winRate(sellStats.wins, sellStats.losses);
+  $("sfTotalPnl").textContent = fmtSigned(sellStats.pnl, 3);
+  $("sfTotalPnl").className = "summary-item " + clsPnl(sellStats.pnl);
+  const avgPnl = sellStats.total > 0 ? sellStats.pnl / sellStats.total : null;
+  $("sfAvgPnl").textContent = fmtSigned(avgPnl, 3);
+  $("sfAvgPnl").className = "summary-item " + clsPnl(avgPnl);
+  $("sfTotalBuys").textContent = s.total_buys || 0;
+
+  // 按方向
+  const bySide = s.by_side || [];
+  $("sfBySide").innerHTML = bySide.length
+    ? bySide.map(r => renderStatsRow((r.side||"-").toUpperCase(), r)).join("")
+    : '<tr><td colspan="7" class="table-empty">暂无数据</td></tr>';
+
+  // 按原因
+  const byReason = s.by_reason || [];
+  $("sfByReason").innerHTML = byReason.length
+    ? byReason.map(r => renderStatsRow(r.open_reason || "-", r)).join("")
+    : '<tr><td colspan="7" class="table-empty">暂无数据</td></tr>';
+
+  // 按入场价格
+  const byEntry = s.by_entry_price || [];
+  $("sfByEntryPrice").innerHTML = byEntry.length
+    ? byEntry.map(r => renderStatsRow(r.price_range, r)).join("")
+    : '<tr><td colspan="7" class="table-empty">暂无数据</td></tr>';
+
+  // 按差价
+  const byDiff = s.by_diff || [];
+  $("sfByDiff").innerHTML = byDiff.length
+    ? byDiff.map(r => renderStatsRow(r.diff_range, r)).join("")
+    : '<tr><td colspan="7" class="table-empty">暂无数据</td></tr>';
+
+  // 按日期
+  const byDay = s.by_day || [];
+  $("sfByDay").innerHTML = byDay.length
+    ? byDay.map(r => renderStatsRow(r.day, r)).join("")
+    : '<tr><td colspan="7" class="table-empty">暂无数据</td></tr>';
+}
+
 // ── 增强初始化 ──
 function initApp() {
   pollDb();
@@ -1124,8 +1279,10 @@ function initApp() {
   // 新页面数据轮询
   fetchAllTrades();
   fetchBalanceHistory();
+  fetchStatsDetail();
   setInterval(fetchAllTrades, 5000);
   setInterval(fetchBalanceHistory, 10000);
+  setInterval(fetchStatsDetail, 10000);
 }
 
 // 周期切换
