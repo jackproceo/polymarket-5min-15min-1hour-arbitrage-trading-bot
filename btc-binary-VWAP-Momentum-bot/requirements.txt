@@ -30,6 +30,7 @@ python-dotenv>=1.0.0
 # Web dashboard (optional; enable in config.json web_dashboard.enabled)
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
+python-multipart>=0.0.9
 
 # Misc
 requests>=2.31.0

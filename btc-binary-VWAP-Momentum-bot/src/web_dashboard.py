@@ -48,9 +48,9 @@ _LOGIN_HTML = """<!DOCTYPE html>
   <title>BTC · 登录</title>
   <style>
     :root {
-      --bg: #0d1117; --panel: #161b22; --border: #30363d;
-      --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
-      --blue: #58a6ff;
+      --bg: #f5f6f8; --panel: #ffffff; --border: #e0e4e8;
+      --text: #1a1d23; --muted: #6b7280; --green: #16a34a; --red: #dc2626;
+      --blue: #2563eb;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -62,18 +62,19 @@ _LOGIN_HTML = """<!DOCTYPE html>
     .box {
       background: var(--panel); border: 1px solid var(--border);
       border-radius: 12px; padding: 2rem; width: 100%; max-width: 360px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
     }
-    h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #111827; }
     p.sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.25rem; }
     input {
       width: 100%; padding: 0.65rem 0.85rem;
-      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      background: #f9fafb; border: 1px solid var(--border); border-radius: 6px;
       color: var(--text); font-size: 0.95rem; outline: none;
     }
-    input:focus { border-color: var(--blue); }
+    input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
     button {
       width: 100%; margin-top: 0.75rem; padding: 0.65rem;
-      background: var(--green); color: #000;
+      background: var(--blue); color: #fff;
       border: none; border-radius: 6px; font-size: 0.95rem;
       font-weight: 600; cursor: pointer;
     }
@@ -280,10 +281,10 @@ _HTML_TABBED = r"""<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>BTC 实时机器人</title>
   <style>
-    :root {--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;--violet:#a371f7;}
+    :root {--bg:#f5f6f8;--panel:#ffffff;--border:#e0e4e8;--text:#1a1d23;--muted:#6b7280;--green:#16a34a;--red:#dc2626;--yellow:#ca8a04;--blue:#2563eb;--violet:#7c3aed;}
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text);padding:0.5rem 1rem 1rem;line-height:1.45;}
-    h1{font-size:1.1rem;font-weight:600;margin:0 0 0.5rem;}
+    h1{font-size:1.1rem;font-weight:600;margin:0 0 0.5rem;color:#111827;}
     .tabs{display:flex;gap:0;margin-bottom:0.75rem;border-bottom:2px solid var(--border);}
     .tab{padding:0.5rem 1rem;cursor:pointer;border:none;background:none;color:var(--muted);font-size:0.85rem;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;}
     .tab:hover{color:var(--text);}
@@ -292,31 +293,32 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     .tab-content.active{display:block;}
     .meta{color:var(--muted);font-size:0.85rem;margin-bottom:1rem;}
     .grid{display:grid;gap:0.75rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:0.85rem;}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:0.85rem;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
     .card h2{font-size:0.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 0.5rem;}
     .sig{font-size:1rem;font-weight:600;}
     .sig.wait{color:var(--yellow);}.sig.buy{color:var(--green);}.sig.block{color:var(--red);}
     .mono{font-family:ui-monospace,monospace;font-size:0.82rem;}
-    .btc{border-color:#d29922;}
+    .btc{border-color:#f59e0b;}
     footer{margin-top:1rem;color:var(--muted);font-size:0.75rem;}
 
     /* 表格样式 */
-    table{width:100%;border-collapse:collapse;font-size:0.8rem;}
-    th,td{padding:0.45rem 0.5rem;text-align:left;border-bottom:1px solid var(--border);}
-    th{color:var(--muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;position:sticky;top:0;background:var(--panel);z-index:1;}
-    tr:hover{background:rgba(88,166,255,0.05);}
-    .pnl-pos{color:var(--green);}.pnl-neg{color:var(--red);}
-    .won{color:var(--green);}.lost{color:var(--red);}
+    table{width:100%;border-collapse:collapse;font-size:0.8rem;background:var(--panel);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+    th,td{padding:0.55rem 0.65rem;text-align:left;border-bottom:1px solid var(--border);}
+    th{color:#374151;font-weight:600;font-size:0.72rem;text-transform:uppercase;position:sticky;top:0;background:#f9fafb;z-index:1;}
+    tr:hover{background:#f0f4ff;}
+    tr:last-child td{border-bottom:none;}
+    .pnl-pos{color:var(--green);font-weight:600;}.pnl-neg{color:var(--red);font-weight:600;}
+    .won{color:var(--green);font-weight:600;}.lost{color:var(--red);font-weight:600;}
     a{color:var(--blue);text-decoration:none;}
     a:hover{text-decoration:underline;}
 
     /* 统计卡片 */
     .stat-grid{display:grid;gap:0.5rem;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:1rem;}
-    .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:0.65rem 0.75rem;text-align:center;}
-    .stat-card .v{font-size:1.25rem;font-weight:700;}
+    .stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:0.75rem 0.85rem;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+    .stat-card .v{font-size:1.25rem;font-weight:700;color:#111827;}
     .stat-card .l{font-size:0.7rem;color:var(--muted);margin-top:0.15rem;text-transform:uppercase;}
 
-    .toast{position:fixed;top:1rem;right:1rem;padding:0.5rem 1rem;border-radius:6px;font-size:0.8rem;z-index:99;display:none;}
+    .toast{position:fixed;top:1rem;right:1rem;padding:0.6rem 1.1rem;border-radius:8px;font-size:0.82rem;z-index:99;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.15);}
     .toast.err{background:var(--red);color:#fff;}
 
     .loading{text-align:center;color:var(--muted);padding:2rem;}
