@@ -51,6 +51,7 @@ class HedgeResult:
     price: float = 0.0
     attempts: int = 0
     error: str = ""
+    was_timeout: bool = False  # 网络超时（订单状态未知，不可重试）
 
 
 @dataclass
@@ -246,6 +247,29 @@ class HedgeManager:
                 last_error = str(e)
                 hedge_logger.error(f"  ❌ Exception: {last_error}")
                 logger.error(f"Hedge attempt {attempt} error: {last_error}")
+
+                # ═══════════════════════════════════════════════════════
+                # 超时检测：区分网络超时 vs API 拒绝
+                # - 网络超时：订单状态未知，不可重试（可能已下单）
+                # - API 拒绝：可重试（服务器明确拒绝）
+                # ═══════════════════════════════════════════════════════
+                is_timeout = any(kw in last_error.lower() for kw in (
+                    "timeout", "timed out", "connection", "connect",
+                    "network", "socket", "reset", "refused", "unreachable",
+                ))
+                if is_timeout:
+                    hedge_logger.error(
+                        "🛑 网络超时 — 订单状态未知，禁止重试（避免重复下单）"
+                    )
+                    logger.error(
+                        f"Hedge timeout detected, blocking retries: {last_error}"
+                    )
+                    return HedgeResult(
+                        success=False,
+                        error=f"Network timeout: {last_error}",
+                        attempts=attempt,
+                        was_timeout=True,
+                    )
                 
                 if attempt < self.config.max_retries:
                     await asyncio.sleep(self.config.retry_delay_ms / 1000)

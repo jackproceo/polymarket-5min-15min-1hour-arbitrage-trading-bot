@@ -1,6 +1,6 @@
 """
-Order Executor - Real trading engine with retry logic
-Based on /root/clip/trade.py methods
+订单执行器 - 带重试逻辑的真实交易引擎
+基于 /root/clip/trade.py 的方法
 """
 import os
 import time
@@ -23,9 +23,9 @@ import logging
 from trade_logger import log_buy_attempt, log_buy_result, log_sell_attempt, log_sell_result
 import threading
 
-# 🔥 GLOBAL: Blocked markets per-coin (race condition protection)
-# Markets in this dict CANNOT receive new buy orders (stop-loss/flip-stop active)
-# Structure: {'btc': set(), 'eth': set(), 'sol': set(), 'xrp': set()}
+# 🔥 全局：按币种阻塞的市场（竞态条件保护）
+# 此字典中的市场不能接收新的买单（止损/翻转止损活跃）
+# 结构：{'btc': set(), 'eth': set(), 'sol': set(), 'xrp': set()}
 _blocked_markets_lock = threading.Lock()
 _blocked_markets = {
     'btc': set(),
@@ -37,31 +37,31 @@ _blocked_markets = {
 
 @dataclass
 class OrderResult:
-    """Order execution result (with FAK/FOK retry support)"""
+    """订单执行结果（带 FAK/FOK 重试支持）"""
     success: bool
     order_id: Optional[str] = None
-    filled_size: float = 0.0           # Total contracts filled (can be less than target!)
-    filled_price: float = 0.0          # Average price per contract
-    total_spent_usd: float = 0.0       # Total USD spent/received (sum across all attempts)
-    attempts: int = 1                  # Number of attempts made
+    filled_size: float = 0.0           # 总成交合约数（可能少于目标！）
+    filled_price: float = 0.0          # 每份合约的平均价格
+    total_spent_usd: float = 0.0       # 总花费/收到 USD（所有尝试总和）
+    attempts: int = 1                  # 尝试次数
     error: Optional[str] = None
     dry_run: bool = False
     elapsed_ms: int = 0
-    remaining_balance: float = 0.0     # 🔥 FIX 4: Final balance on blockchain after sell
+    remaining_balance: float = 0.0     # 🔥 修复4：卖出后区块链上的最终余额
 
 
 class OrderExecutor:
-    """Execute real orders on Polymarket (methods from /root/clip)"""
+    """在 Polymarket 上执行真实订单（方法来自 /root/clip）"""
     
     @staticmethod
     def block_market(market_slug: str, coin: str):
         """
-        🔥 CRITICAL: Block market from receiving new buy orders (per-coin)
-        Call this IMMEDIATELY when stop-loss/flip-stop triggers
+        🔥 关键：阻塞市场，使其无法接收新的买单（按币种）
+        当止损/翻转止损触发时立即调用此方法
         
-        Args:
-            market_slug: Market identifier
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
+        参数：
+            market_slug: 市场标识符
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
         """
         with _blocked_markets_lock:
             if coin in _blocked_markets:
@@ -73,11 +73,11 @@ class OrderExecutor:
     @staticmethod
     def unblock_market(market_slug: str, coin: str):
         """
-        Unblock market (call after successful redeem)
+        解除市场阻塞（成功赎回后调用）
         
-        Args:
-            market_slug: Market identifier
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
+        参数：
+            market_slug: 市场标识符
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
         """
         with _blocked_markets_lock:
             if coin in _blocked_markets and market_slug in _blocked_markets[coin]:
@@ -87,14 +87,14 @@ class OrderExecutor:
     @staticmethod
     def is_market_blocked(market_slug: str, coin: str) -> bool:
         """
-        Check if market is blocked for specific coin (atomic check)
+        检查市场是否对特定币种被阻塞（原子检查）
         
-        Args:
-            market_slug: Market identifier
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
+        参数：
+            market_slug: 市场标识符
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
             
-        Returns:
-            True if blocked for this coin, False otherwise
+        返回：
+            如果该币种被阻塞则返回 True，否则返回 False
         """
         with _blocked_markets_lock:
             return coin in _blocked_markets and market_slug in _blocked_markets[coin]
@@ -102,32 +102,32 @@ class OrderExecutor:
     def __init__(self, safety_guard: SafetyGuard, config: Dict, data_feed=None):
         self.safety = safety_guard
         self.config = config
-        self.data_feed = data_feed  # ✅ For access to position_tracker
+        self.data_feed = data_feed  # ✅ 用于访问 position_tracker
         
-        # Initialize CLOB client
+        # 初始化 CLOB 客户端
         self.client = None
         self.wallet_address = None
         
         if not self.safety.dry_run:
             try:
                 from dotenv import load_dotenv
-                # Load .env from project root (not from current directory)
+                # 从项目根目录加载 .env（不是当前目录）
                 project_root = Path(__file__).parent.parent
                 env_path = project_root / ".env"
                 load_dotenv(env_path)
                 
-                # Read PRIVATE_KEY AFTER loading .env
+                # 加载 .env 后读取 PRIVATE_KEY
                 self.private_key = os.getenv("PRIVATE_KEY", "")
                 if not self.private_key:
                     raise ValueError("PRIVATE_KEY not found in .env")
                 
-                # Read signature type and funder address
+                # 读取签名类型和资助者地址
                 signature_type = int(os.getenv("SIGNATURE_TYPE", "0"))
                 funder_address = os.getenv("FUNDER_ADDRESS", "")
                 
-                # Get wallet address based on SIGNATURE_TYPE
-                # Type 0: Use address from PRIVATE_KEY (standard EOA wallet)
-                # Type 1/2: Use FUNDER_ADDRESS (Polymarket proxy/smart contract wallet)
+                # 根据 SIGNATURE_TYPE 获取钱包地址
+                # Type 0: 使用 PRIVATE_KEY 的地址（标准 EOA 钱包）
+                # Type 1/2: 使用 FUNDER_ADDRESS（Polymarket 代理/智能合约钱包）
                 if signature_type == 0:
                     self.wallet_address = Account.from_key(self.private_key).address
                     wallet_type = "EOA"
@@ -156,7 +156,7 @@ class OrderExecutor:
                         signature_type=signature_type,
                         funder=funder_address
                     )
-                # 🚨 CRITICAL: Generate and set API credentials
+                # 🚨 关键：生成并设置 API 凭据
                 print(f"[EXECUTOR] Generating API credentials...")
                 creds = self.client.create_or_derive_api_creds()
                 self.client.set_api_creds(creds)
@@ -169,25 +169,25 @@ class OrderExecutor:
                 print(f"[EXECUTOR] ❌ Failed to init CLOB client: {e}")
                 self.safety.activate_emergency_stop("CLOB_INIT_FAILED")
         else:
-            self.private_key = ""  # DRY_RUN - no private key needed
+            self.private_key = ""  # DRY_RUN - 不需要私钥
             print("[EXECUTOR] ✓ DRY_RUN mode (no real orders)")
         
-        # 🔥 RPC Configuration (Multiple endpoints with parallel requests)
+        # 🔥 RPC 配置（多个端点，并行请求）
         self.rpc_config = config.get('execution', {}).get('rpc_config', {})
         
-        # RPC endpoints (fallback to env var if not in config)
+        # RPC 端点（如果配置中没有，则回退到环境变量）
         self.rpc_endpoints = self.rpc_config.get('endpoints', [
             os.getenv("RPC_URL", "https://polygon-rpc.com")
         ])
         
-        # RPC parameters
+        # RPC 参数
         self.rpc_single_timeout = self.rpc_config.get('single_request_timeout_sec', 3)
         self.rpc_parallel_timeout = self.rpc_config.get('parallel_timeout_sec', 5)
         self.rpc_retry_attempts = self.rpc_config.get('retry_attempts', 2)
         self.rpc_retry_delay = self.rpc_config.get('retry_delay_sec', 0.3)
         self.rpc_parallel_enabled = self.rpc_config.get('enable_parallel_requests', True)
         
-        # Log RPC configuration
+        # 记录 RPC 配置
         print(f"[EXECUTOR] {'='*60}")
         print(f"[EXECUTOR] 🌐 RPC CONFIGURATION:")
         print(f"[EXECUTOR]    Endpoints: {len(self.rpc_endpoints)}")
@@ -201,7 +201,7 @@ class OrderExecutor:
         print(f"[EXECUTOR]    Parallel mode: {'ENABLED ⚡' if self.rpc_parallel_enabled else 'DISABLED'}")
         print(f"[EXECUTOR] {'='*60}\n")
         
-        # CTF contract for token balances
+        # CTF 合约，用于代币余额
         self.CTF_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
         self.CTF_ABI = [
             {"inputs": [{"name": "_owner", "type": "address"}, {"name": "_id", "type": "uint256"}], 
@@ -209,7 +209,7 @@ class OrderExecutor:
              "stateMutability": "view", "type": "function"}
         ]
         
-        # USDC contracts
+        # USDC 合约
         self.USDC_BRIDGED = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
         self.USDC_NATIVE = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359"
         self.ERC20_ABI = [
@@ -219,41 +219,41 @@ class OrderExecutor:
              'outputs': [{'name': '', 'type': 'uint8'}], 'type': 'function'}
         ]
         
-        # Order logging
+        # 订单日志
         self.orders_log = Path("logs/orders.jsonl")
         self.orders_log.parent.mkdir(exist_ok=True)
         
-        # Callback for tracking balance changes
+        # 回调函数，用于跟踪余额变化
         self.balance_change_callback = None
         
-        # Callback for checking market close (race condition protection)
+        # 回调函数，用于检查市场关闭（竞态条件保护）
         self.market_closing_check_callback = None
     
     def set_balance_callback(self, callback):
         """
-        Set callback for balance changes
+        设置余额变化的回调函数
         callback(amount, operation, is_absolute=False)
-          - amount: float - change amount or absolute value
-          - operation: str - operation type ('BUY', 'SELL', 'REDEEM', 'REDEEM_REFRESH')
-          - is_absolute: bool - if True, amount = full balance, else delta
+          - amount: float - 变化金额或绝对值
+          - operation: str - 操作类型（'BUY', 'SELL', 'REDEEM', 'REDEEM_REFRESH'）
+          - is_absolute: bool - 如果为 True，amount = 全部余额，否则为增量
         """
         self.balance_change_callback = callback
         print("[EXECUTOR] ✓ Balance change callback registered")
     
     def set_market_closing_check(self, callback):
         """
-        Set callback for checking market close (race condition protection)
+        设置检查市场关闭的回调函数（竞态条件保护）
         callback(market_slug: str) -> bool
-          - Returns True if market is closing and buys should be blocked
-          - Returns False if market is open and buys are allowed
+          - 如果市场正在关闭且应阻塞买单则返回 True
+          - 如果市场开放且允许买单则返回 False
         
-        🔥 CRITICAL: Prevents buys AFTER stop-loss/flip-stop trigger
+        🔥 关键：阻止在止损/翻转止损触发后的买入
         """
         self.market_closing_check_callback = callback
         print("[EXECUTOR] ✓ Market closing check callback registered")
     
     def _log_redeem(self, market_slug: str, success: bool, amount: float, tx_hash: str = "", reason: str = ""):
-        """Log redeem operation to separate file"""
+        """将赎回操作记录到单独的文件"""
         try:
             import os
             from datetime import datetime
@@ -270,8 +270,8 @@ class OrderExecutor:
     
     def get_wallet_usdc_balance(self) -> Optional[float]:
         """
-        Get wallet USDC balance (bridged + native)
-        Copy of method from /root/clip/trade.py
+        获取钱包 USDC 余额（桥接版 + 原生版）
+        来自 /root/clip/trade.py 的方法副本
         """
         try:
             if not self.wallet_address and self.private_key:
@@ -281,7 +281,7 @@ class OrderExecutor:
                 print("[EXECUTOR] ❌ No wallet address")
                 return None
             
-            # Use first RPC endpoint for wallet balance queries
+            # 使用第一个 RPC 端点查询钱包余额
             rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://polygon-rpc.com"
             w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': self.rpc_single_timeout}))
             
@@ -291,7 +291,7 @@ class OrderExecutor:
             
             total = 0.0
             
-            # USDC.e (bridged) - main Polymarket token
+            # USDC.e（桥接版）- Polymarket 主要代币
             usdc_e = w3.eth.contract(
                 address=Web3.to_checksum_address(self.USDC_BRIDGED), 
                 abi=self.ERC20_ABI
@@ -300,7 +300,7 @@ class OrderExecutor:
             decimals_e = usdc_e.functions.decimals().call()
             total += balance_e / (10 ** decimals_e)
             
-            # Native USDC
+            # 原生 USDC
             usdc_n = w3.eth.contract(
                 address=Web3.to_checksum_address(self.USDC_NATIVE), 
                 abi=self.ERC20_ABI
@@ -318,10 +318,10 @@ class OrderExecutor:
     
     def get_pol_balance(self) -> Optional[float]:
         """
-        Get POL balance (native Polygon token)
+        获取 POL 余额（Polygon 原生代币）
         
-        Returns:
-            Balance in POL or None on error
+        返回：
+            POL 余额，出错时返回 None
         """
         try:
             if not self.wallet_address and self.private_key:
@@ -331,7 +331,7 @@ class OrderExecutor:
                 print("[EXECUTOR] ❌ No wallet address")
                 return None
             
-            # Use first RPC endpoint for wallet balance queries
+            # 使用第一个 RPC 端点查询钱包余额
             rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://polygon-rpc.com"
             w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={'timeout': self.rpc_single_timeout}))
             
@@ -339,9 +339,9 @@ class OrderExecutor:
                 print("[EXECUTOR] ⚠ Cannot connect to RPC")
                 return None
             
-            # Get native balance (in Wei)
+            # 获取原生余额（以 Wei 为单位）
             balance_wei = w3.eth.get_balance(self.wallet_address)
-            # Convert to POL (1 POL = 10^18 Wei)
+            # 转换为 POL（1 POL = 10^18 Wei）
             balance_pol = balance_wei / 1e18
             
             print(f"[EXECUTOR] POL balance: {balance_pol:.4f}")
@@ -353,18 +353,18 @@ class OrderExecutor:
     
     def get_blockchain_token_balance(self, token_id: str) -> Optional[float]:
         """
-        ✅ GET REAL TOKEN BALANCE FROM BLOCKCHAIN!
+        ✅ 从区块链获取真实代币余额！
         
-        Uses PARALLEL REQUESTS to multiple RPC endpoints for:
-        - Maximum speed (take first successful response ~20-70ms)
-        - Maximum reliability (if one RPC fails - use another)
-        - Minimum timeout (instead of 60 seconds -> 5-10 seconds)
+        使用并行请求到多个 RPC 端点：
+        - 最大速度（取第一个成功响应 ~20-70ms）
+        - 最大可靠性（如果一个 RPC 失败，换另一个）
+        - 最小超时（从 60 秒降到 5-10 秒）
         
-        Args:
-            token_id: Token ID (e.g. "52114319501245915516055106046884209969926127482827954674443846427813813222426")
+        参数：
+            token_id: 代币 ID（例如 "52114319501245915516055106046884209969926127482827954674443846427813813222426"）
         
-        Returns:
-            Real balance in contracts (float) or None if all RPCs unavailable
+        返回：
+            合约中的真实余额（float），如果所有 RPC 都不可用则返回 None
         """
         if self.safety.dry_run:
             return 0.0
@@ -377,9 +377,9 @@ class OrderExecutor:
                 print("[EXECUTOR] ❌ No wallet address for token balance query")
                 return None
             
-            # 🔥 FUNCTION: Request to one RPC endpoint
+            # 🔥 函数：向一个 RPC 端点发送请求
             def query_single_rpc(rpc_url: str, attempt: int = 1) -> Optional[float]:
-                """Query balance from a single RPC endpoint"""
+                """从单个 RPC 端点查询余额"""
                 try:
                     w3 = Web3(Web3.HTTPProvider(
                         rpc_url, 
@@ -409,24 +409,24 @@ class OrderExecutor:
                     print(f"[EXECUTOR] ⚠️  RPC [{rpc_short}...] failed: {type(e).__name__}")
                     return None
             
-            # 🔥 RETRY LOOP with parallel or sequential requests
+            # 🔥 重试循环，支持并行或串行请求
             for attempt in range(1, self.rpc_retry_attempts + 1):
                 print(f"[EXECUTOR] 🔄 Balance query attempt {attempt}/{self.rpc_retry_attempts}...")
                 
                 if self.rpc_parallel_enabled and len(self.rpc_endpoints) > 1:
-                    # 🚀 PARALLEL REQUESTS
+                    # 🚀 并行请求
                     print(f"[EXECUTOR] 🚀 Querying {len(self.rpc_endpoints)} RPCs in parallel...")
                     
                     executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(self.rpc_endpoints))
                     
                     try:
-                        # Start all requests SIMULTANEOUSLY
+                        # 同时启动所有请求
                         futures = {
                             executor.submit(query_single_rpc, rpc, attempt): rpc 
                             for rpc in self.rpc_endpoints
                         }
                         
-                        # Wait for FIRST successful result
+                        # 等待第一个成功的返回结果
                         for future in concurrent.futures.as_completed(
                             futures, 
                             timeout=self.rpc_parallel_timeout
@@ -434,34 +434,34 @@ class OrderExecutor:
                             try:
                                 balance = future.result()
                                 if balance is not None:
-                                    # 🔥 CRITICAL: Immediately cancel remaining futures!
+                                    # 🔥 关键：立即取消剩余的任务！
                                     executor.shutdown(wait=False, cancel_futures=True)
                                     print(f"[EXECUTOR] ✅ Got balance: {balance:.4f} contracts (token: {token_id[:16]}...)")
-                                    return balance  # ← EARLY EXIT!
+                                    return balance  # ← 提前退出！
                             except Exception:
                                 continue
                         
                     except concurrent.futures.TimeoutError:
                         print(f"[EXECUTOR] ⏱️  All RPCs timeout after {self.rpc_parallel_timeout}s")
                     finally:
-                        # Guaranteed cleanup
+                        # 保证清理
                         executor.shutdown(wait=False, cancel_futures=True)
                 
                 else:
-                    # 🔄 SEQUENTIAL REQUESTS (fallback or if parallel disabled)
+                    # 🔄 串行请求（回退或并行禁用时）
                     print(f"[EXECUTOR] 🔄 Querying RPCs sequentially...")
                     for rpc in self.rpc_endpoints:
                         balance = query_single_rpc(rpc, attempt)
                         if balance is not None:
                             print(f"[EXECUTOR] ✅ Got balance: {balance:.4f} contracts (token: {token_id[:16]}...)")
-                            return balance  # ✅ Success!
+                            return balance  # ✅ 成功！
                 
-                # Didn't get balance - wait before next attempt
+                # 未获取到余额 - 等待后重试
                 if attempt < self.rpc_retry_attempts:
                     print(f"[EXECUTOR] ⏸️  Waiting {self.rpc_retry_delay}s before retry...")
                     time.sleep(self.rpc_retry_delay)
             
-            # All attempts failed
+            # 所有尝试均失败
             print(f"[EXECUTOR] ❌ All {self.rpc_retry_attempts} attempts failed for all {len(self.rpc_endpoints)} RPC endpoints!")
             return None
             
@@ -473,24 +473,24 @@ class OrderExecutor:
     
     def _get_fresh_bid_price(self, market_slug: str, side: str) -> Optional[float]:
         """
-        ✅ GET FRESH BID PRICE FROM WEBSOCKET DATA FEED!
+        ✅ 从 WebSocket 数据源获取最新买入价！
         
-        Used to update sell price on each FAK attempt.
-        Prices are updated real-time from Polymarket WebSocket (no delays or API requests).
+        用于在每次 FAK 尝试时更新卖出价格。
+        价格通过 Polymarket WebSocket 实时更新（无延迟或 API 请求）。
         
-        Args:
-            market_slug: Market slug (e.g. 'btc-updown-15m-1768134600')
-            side: 'UP' or 'DOWN'
+        参数：
+            market_slug: 市场标识（例如 'btc-updown-15m-1768134600'）
+            side: 'UP' 或 'DOWN'
         
-        Returns:
-            Fresh BID price (float) or None if unavailable
+        返回：
+            最新买入价（float），如果不可用则返回 None
         """
         if not self.data_feed:
             return None
         
         try:
-            # Determine coin from market_slug
-            # Format: 'btc-updown-15m-1768134600' -> 'btc'
+            # 从 market_slug 确定币种
+            # 格式：'btc-updown-15m-1768134600' -> 'btc'
             coin = market_slug.split('-')[0].lower()
             
             if coin not in ['btc', 'eth', 'sol', 'xrp']:
@@ -503,7 +503,7 @@ class OrderExecutor:
             if not market_state:
                 return None
             
-            # Get BID for required side
+            # 获取所需方向的 BID
             if side == 'UP':
                 bid = market_state.get('up_bid')
             elif side == 'DOWN':
@@ -512,7 +512,7 @@ class OrderExecutor:
                 print(f"[EXECUTOR] ⚠️ Invalid side: {side}")
                 return None
             
-            # Validate BID price
+            # 验证 BID 价格
             if bid and 0.01 < bid < 0.99:
                 return bid
             else:
@@ -525,38 +525,38 @@ class OrderExecutor:
     def place_buy_order(self, market_slug: str, token_id: str, side: str, 
                        contracts: int, ask_price: float, coin: str = None) -> OrderResult:
         """
-        Place BUY order with FAK partial fill tracking
+        使用 FAK 部分成交跟踪下买单
         
-        🚨 CRITICAL: FAK orders can fill partially!
-        - Track actual fill through takingAmount/makingAmount
-        - Complete to target with max_fak_attempts attempts
-        - Round to 2 decimals, minimum $1.00
+        🚨 关键：FAK 订单可能部分成交！
+        - 通过 takingAmount/makingAmount 跟踪实际成交
+        - 使用 max_fak_attempts 次尝试完成目标
+        - 四舍五入到 2 位小数，最低 $1.00
         
-        Args:
-            market_slug: Market slug
-            token_id: Token ID to buy
-            side: 'UP' or 'DOWN'
-            contracts: Target number of contracts (may NOT be reached!)
-            ask_price: Current ask price
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp') for per-coin blocking
+        参数：
+            market_slug: 市场标识
+            token_id: 要买入的代币 ID
+            side: 'UP' 或 'DOWN'
+            contracts: 目标合约数（可能无法达到！）
+            ask_price: 当前卖价
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）用于按币种阻塞
             
-        Returns:
-            OrderResult (filled_size can be < contracts!)
+        返回：
+            OrderResult（filled_size 可能小于 contracts！）
         """
-        # Determine coin from market_slug if not provided
+        # 如果未提供，从 market_slug 确定币种
         if not coin:
             for c in ['btc', 'eth', 'sol', 'xrp']:
                 if f'{c}-updown-' in market_slug:
                     coin = c
                     break
-        # Read parameters from config!
+        # 从配置读取参数！
         exec_config = self.config.get('execution', {}).get('buy', {})
         MAX_FAK_ATTEMPTS = exec_config.get('max_fak_attempts', 3)
         RETRY_DELAY = exec_config.get('retry_delay_sec', 0.3)
         MIN_ORDER_USD = exec_config.get('min_order_usd', 1.00)
         TARGET_FILL_PERCENT = exec_config.get('target_fill_percent', 95.0) / 100.0
         
-        # Safety check
+        # 安全检查
         allowed, reason = self.safety.check_order_allowed(
             side=side,
             contracts=contracts,
@@ -565,7 +565,7 @@ class OrderExecutor:
         )
         
         if not allowed:
-            # DRY_RUN - simulate success
+            # DRY_RUN - 模拟成功
             if reason == "DRY_RUN_MODE":
                 result = OrderResult(
                     success=True,
@@ -579,7 +579,7 @@ class OrderExecutor:
                 self._log_order(market_slug, side, contracts, ask_price, result, "BUY", fak_attempt=1)
                 return result
             else:
-                # Other blocking reason
+                # 其他阻止原因
                 result = OrderResult(
                     success=False,
                     error=reason
@@ -587,20 +587,20 @@ class OrderExecutor:
                 print(f"[EXECUTOR] ❌ Order blocked: {reason}")
                 return result
         
-        # 🔥 REAL TRADING WITH FAK PARTIAL FILL TRACKING
+        # 🔥 真实交易，带 FAK 部分成交跟踪
         target_contracts = contracts
         
-        # Market order pricing: add slippage for guaranteed fill
-        SLIPPAGE_BUY = 0.05  # 5% above ASK (safety margin, exchange will buy cheaper if possible)
+        # 市价单定价：增加滑点以确保成交
+        SLIPPAGE_BUY = 0.05  # 高于卖价 5%（安全边际，交易所会在可能时以更低价格买入）
         aggressive_price = ask_price * (1 + SLIPPAGE_BUY)
-        normalized_price = math.ceil(aggressive_price * 100) / 100  # Round UP to 2 decimals
+        normalized_price = math.ceil(aggressive_price * 100) / 100  # 向上取整到 2 位小数
         
         total_filled_contracts = 0.0
         total_spent_usd = 0.0
         start_time_total = time.time()
         
-        # 🔥 RACE CONDITION PROTECTION #1: ATOMIC CHECK (highest priority!)
-        # Check blocked_markets for THIS COIN FIRST before any operations
+        # 🔥 竞态条件保护 #1：原子检查（最高优先级！）
+        # 在任何操作之前先检查此币种的 blocked_markets
         if coin and OrderExecutor.is_market_blocked(market_slug, coin):
             print(f"[EXECUTOR] 🛑 BLOCKED (ATOMIC): {coin.upper()} market {market_slug} is blocked!")
             
@@ -618,12 +618,12 @@ class OrderExecutor:
         
         print(f"[EXECUTOR] 🎯 BUY TARGET: {target_contracts} {side} @ ${normalized_price:.2f} (ASK ${ask_price:.2f} +{SLIPPAGE_BUY*100:.0f}% slippage, max {MAX_FAK_ATTEMPTS} FAK)")
         
-        # 🔥 RACE CONDITION PROTECTION #2: Callback check (secondary)
+        # 🔥 竞态条件保护 #2：回调检查（次要）
         if coin and hasattr(self, 'market_closing_check_callback') and self.market_closing_check_callback:
             if self.market_closing_check_callback(market_slug, coin):
                 print(f"[EXECUTOR] 🛑 BLOCKED: {coin.upper()} market {market_slug} is closing (stop-loss/flip-stop triggered)")
                 
-                # 📝 LOG: Race condition block
+                # 📝 日志：竞态条件阻塞
                 from trade_logger import trades_logger
                 trades_logger.warning(
                     f"MARKET_CLOSING_BLOCKED | Market: {market_slug} | Coin: {coin.upper()} | Side: {side} | "
@@ -638,17 +638,17 @@ class OrderExecutor:
         
         for fak_attempt in range(1, MAX_FAK_ATTEMPTS + 1):
             try:
-                # 🔥 RACE CONDITION PROTECTION #1: ATOMIC CHECK in FAK loop
+                # 🔥 竞态条件保护 #1：FAK 循环中的原子检查
                 if coin and OrderExecutor.is_market_blocked(market_slug, coin):
                     print(f"[EXECUTOR] 🛑 BLOCKED (ATOMIC in FAK {fak_attempt}): {coin.upper()} market {market_slug}")
-                    break  # Exit FAK loop immediately
+                    break  # 立即退出 FAK 循环
                 
-                # 🔥 RACE CONDITION PROTECTION #2: Callback check
+                # 🔥 竞态条件保护 #2：回调检查
                 if coin and hasattr(self, 'market_closing_check_callback') and self.market_closing_check_callback:
                     if self.market_closing_check_callback(market_slug, coin):
                         print(f"[EXECUTOR] 🛑 BLOCKED (attempt {fak_attempt}): {coin.upper()} market {market_slug} is closing")
                         
-                        # 📝 LOG: Race condition block during buy loop
+                        # 📝 日志：买入循环中的竞态条件阻塞
                         from trade_logger import trades_logger
                         trades_logger.warning(
                             f"BUY_BLOCKED_DURING_FAK | Market: {market_slug} | Coin: {coin.upper()} | Side: {side} | "
@@ -657,20 +657,20 @@ class OrderExecutor:
                         
                         break  # Exit loop, return what we've accumulated
                 
-                # How much more to buy?
+                # 还需要买多少？
                 remaining_contracts = target_contracts - total_filled_contracts
                 
-                # Check: already bought enough?
+                # 检查：是否已买够？
                 if remaining_contracts <= 0.01 or total_filled_contracts >= target_contracts * TARGET_FILL_PERCENT:
                     fill_pct = (total_filled_contracts / target_contracts) * 100
                     print(f"[EXECUTOR] ✅ BUY TARGET REACHED: {total_filled_contracts:.2f}/{target_contracts} ({fill_pct:.1f}%)")
                     break
                 
-                # 🚨 CRITICAL: Convert contracts to DOLLARS!
+                # 🚨 关键：将合约数量转换为美元！
                 remaining_usd = remaining_contracts * normalized_price
-                order_size_usd = round(remaining_usd, 2)  # Round to 2 decimals!
+                order_size_usd = round(remaining_usd, 2)  # 四舍五入到 2 位小数！
                 
-                # 🚨 Minimum $1.00
+                # 🚨 最低 $1.00
                 if order_size_usd < MIN_ORDER_USD:
                     print(f"[EXECUTOR] ⚠ Remaining ${order_size_usd:.2f} < ${MIN_ORDER_USD:.2f} minimum, stopping")
                     break
@@ -680,10 +680,10 @@ class OrderExecutor:
                 
                 start_time = time.time()
                 
-                # Create FAK order (size in DOLLARS!)
+                # 创建 FAK 订单（金额以美元计！）
                 order_args = OrderArgs(
                     price=normalized_price,
-                    size=round(remaining_contracts, 2),  # 🚨 IN CONTRACTS!
+                    size=round(remaining_contracts, 2),  # 🚨 以合约为单位！
                     side=BUY,
                     token_id=token_id,
                 )
@@ -694,12 +694,12 @@ class OrderExecutor:
                 elapsed_ms = int((time.time() - start_time) * 1000)
                 
                 if api_result.get("success"):
-                    # 🚨 READ ACTUAL FILL!
-                    taking_amount = float(api_result.get("takingAmount", 0))  # Contracts received
-                    making_amount = float(api_result.get("makingAmount", 0))  # Dollars spent
+                    # 🚨 读取实际成交！
+                    taking_amount = float(api_result.get("takingAmount", 0))  # 收到的合约数
+                    making_amount = float(api_result.get("makingAmount", 0))  # 花费的美元数
                     order_id = api_result.get("orderID", "N/A")
                     
-                    # Update counters
+                    # 更新计数器
                     total_filled_contracts += taking_amount
                     total_spent_usd += making_amount
                     log_buy_result(market_slug, side, target_contracts, total_filled_contracts, target_contracts * normalized_price, total_spent_usd, True, fak_attempts=fak_attempt, elapsed_ms=elapsed_ms)
@@ -708,7 +708,7 @@ class OrderExecutor:
                     print(f"[EXECUTOR]   → Filled {taking_amount:.2f} contracts for ${making_amount:.2f} ({elapsed_ms}ms)")
                     print(f"[EXECUTOR]   → Progress: {total_filled_contracts:.2f}/{target_contracts} ({fill_pct:.1f}%)")
                     
-                    # Write to SafetyGuard
+                    # 写入 SafetyGuard
                     self.safety.record_order(
                         side=side,
                         contracts=taking_amount,
@@ -717,7 +717,7 @@ class OrderExecutor:
                         order_id=order_id
                     )
                     
-                    # Log each FAK attempt separately
+                    # 分别记录每次 FAK 尝试
                     partial_result = OrderResult(
                         success=True,
                         order_id=order_id,
@@ -735,17 +735,17 @@ class OrderExecutor:
                     print(f"[EXECUTOR]   🔍 Full API response: {json.dumps(api_result, indent=2)}")
                     print(f"[EXECUTOR]   📋 Sent OrderArgs: price=${sell_price:.2f}, size={remaining_contracts:.2f} contracts, side=SELL, token={token_id}")
                 
-                # Pause before next FAK attempt
+                # 暂停后继续下一次 FAK 尝试
                 if fak_attempt < MAX_FAK_ATTEMPTS:
                     time.sleep(RETRY_DELAY)
                     
             except Exception as e:
                 print(f"[EXECUTOR] ❌ [FAK {fak_attempt}] Exception: {e}")
-                    # Log failed attempt
+                    # 记录失败的尝试
                 if fak_attempt < MAX_FAK_ATTEMPTS:
                     time.sleep(RETRY_DELAY)
         
-        # After all FAK attempts - STOP!
+        # 所有 FAK 尝试之后 - 停止！
         elapsed_total_ms = int((time.time() - start_time_total) * 1000)
         
         if total_filled_contracts > 0:
@@ -766,7 +766,7 @@ class OrderExecutor:
             else:
                 print(f"[EXECUTOR] ⚠ PARTIAL BUY: {total_filled_contracts:.2f}/{target_contracts} ({fill_pct:.1f}%), ${total_spent_usd:.2f}")
             
-            # Notify balance change (spent money)
+            # 通知余额变化（花费的资金）
             if self.balance_change_callback and not result.dry_run:
                 try:
                     self.balance_change_callback(-total_spent_usd, "BUY")
@@ -786,39 +786,39 @@ class OrderExecutor:
     def sell_position(self, market_slug: str, token_id: str, side: str, 
                      contracts: float, bid_price: float = None) -> OrderResult:
         """
-        Sell position with FOK CHUNKED strategy
+        使用 FOK 分块策略卖出仓位
         
-        🔥 FOK CHUNKED = Split into chunks + Fill-Or-Kill for each
+        🔥 FOK 分块 = 拆分为多个块 + 每个块使用 Fill-Or-Kill
         
-        ✅ STRATEGY:
-        1. Request balance from blockchain (once at start)
-        2. Split into chunks by CHUNK_SIZE (default: 40 contracts)
-        3. Sequentially send each chunk as FOK @ $0.01
-        4. Instant retry on failed (up to MAX_CHUNK_RETRIES attempts)
-        5. CHUNK_DELAY pause between successful chunks
-        6. Final sweep: check balance and sell remainder
+        ✅ 策略：
+        1. 从区块链查询余额（开始时一次）
+        2. 按 CHUNK_SIZE（默认：40 合约）拆分为块
+        3. 依次以 FOK 订单 @ $0.01 发送每个块
+        4. 失败时立即重试（最多 MAX_CHUNK_RETRIES 次）
+        5. 成功块之间 CHUNK_DELAY 暂停
+        6. 最终清理：检查余额并卖出剩余部分
         
-        ✅ ADVANTAGES:
-        - Simplicity: FOK = all or nothing (no partial fills)
-        - Reliability: small chunks always pass
-        - Speed: 164 contracts = ~4.5 seconds
-        - Predictability: you know what you're sending
+        ✅ 优势：
+        - 简单：FOK = 全有或全无（无部分成交）
+        - 可靠：小块总能通过
+        - 速度：164 合约 ≈ 4.5 秒
+        - 可预测：清楚知道发送了什么
         
-        ✅ WORKS FOR ALL 4 COINS (BTC, ETH, SOL, XRP)
-        ✅ WORKS FOR BOTH SELL TYPES (stop-loss + flip-stop)
+        ✅ 适用于所有 4 个币种（BTC、ETH、SOL、XRP）
+        ✅ 适用于两种卖出类型（止损 + 翻转止损）
         
-        Args:
-            market_slug: Market slug (any coin)
-            token_id: Token ID to sell
-            side: 'UP' or 'DOWN'
-            contracts: Number of contracts (for reference, re-requested)
-            bid_price: Current BID price (not used, always $0.01)
+        参数：
+            market_slug: 市场标识（任意币种）
+            token_id: 要卖出的代币 ID
+            side: 'UP' 或 'DOWN'
+            contracts: 合约数量（作参考，会重新请求）
+            bid_price: 当前买入价（不使用，始终 $0.01）
             
-        Returns:
-            OrderResult (success=True if sold ≥99% or dust remains)
+        返回：
+            OrderResult（如果卖出 ≥99% 或仅剩粉尘则 success=True）
         """
         # ═══════════════════════════════════════════════════════════
-        # 🔥 READ ALL PARAMETERS FROM CONFIG
+        # 🔥 从配置读取所有参数
         # ═══════════════════════════════════════════════════════════
         exec_config = self.config.get('execution', {}).get('sell', {})
         
@@ -831,7 +831,7 @@ class OrderExecutor:
         SWEEP_MAX_ATTEMPTS = exec_config.get('sweep_max_attempts', 3)
         SWEEP_RETRY_DELAY = exec_config.get('sweep_retry_delay_sec', 1.0)
         
-        # Log parameters
+        # 记录参数
         print(f"\n[EXECUTOR] {'='*60}")
         print(f"[EXECUTOR] 🔥 FOK CHUNKED SELL STARTED")
         print(f"[EXECUTOR] {'='*60}")
@@ -849,7 +849,7 @@ class OrderExecutor:
         print(f"[EXECUTOR] {'='*60}\n")
         
         # ═══════════════════════════════════════════════════════════
-        # STEP 1: GET INITIAL BALANCE FROM BLOCKCHAIN
+        # 步骤 1：从区块链获取初始余额
         # ═══════════════════════════════════════════════════════════
         print(f"[EXECUTOR] [STEP 1] 📊 Fetching balance from blockchain...")
         
@@ -869,7 +869,7 @@ class OrderExecutor:
         
         print(f"[EXECUTOR] ✓ Blockchain balance: {initial_balance:.4f} contracts")
         
-        # Check: if balance is already near 0
+        # 检查：余额是否已接近 0
         if initial_balance < MIN_DUST_THRESHOLD:
             print(f"[EXECUTOR] ✓ Balance below dust threshold ({MIN_DUST_THRESHOLD}), nothing to sell")
             return OrderResult(
@@ -881,7 +881,7 @@ class OrderExecutor:
             )
         
         # ═══════════════════════════════════════════════════════════
-        # STEP 2: SPLIT INTO CHUNKS
+        # 步骤 2：拆分为块
         # ═══════════════════════════════════════════════════════════
         print(f"\n[EXECUTOR] [STEP 2] 🔪 Splitting into chunks...")
         
@@ -901,7 +901,7 @@ class OrderExecutor:
         print(f"[EXECUTOR] ✓ Estimated time: {len(chunks) * CHUNK_DELAY:.1f}s")
         
         # ═══════════════════════════════════════════════════════════
-        # STEP 3: SEND EACH CHUNK WITH INSTANT RETRY
+        # 步骤 3：发送每个块并立即重试
         # ═══════════════════════════════════════════════════════════
         print(f"\n[EXECUTOR] [STEP 3] 🚀 Sending FOK orders...")
         
@@ -917,13 +917,13 @@ class OrderExecutor:
             chunk_start = time.time()
             
             # ════════════════════════════════════════════════════════
-            # RETRY LOOP: Instant retry on failed (NO pause!)
+            # 重试循环：失败时立即重试（无暂停！）
             # ════════════════════════════════════════════════════════
             for attempt in range(1, MAX_CHUNK_RETRIES + 1):
                 print(f"\n[EXECUTOR] [FOK {i}/{len(chunks)}] Attempt {attempt}/{MAX_CHUNK_RETRIES}")
                 print(f"[EXECUTOR]    Selling {chunk:.2f} contracts @ ${PRICE:.2f}...")
                 
-                # 📝 LOG: Attempt to sell chunk
+                # 📝 日志：尝试卖出块
                 log_sell_attempt(
                     market_slug=market_slug,
                     side=f"{side}_CHUNK_{i}/{len(chunks)}",
@@ -935,7 +935,7 @@ class OrderExecutor:
                 
                 attempt_start = time.time()
                 
-                # DRY RUN check
+                # 检查 DRY RUN
                 if self.safety.dry_run:
                     print(f"[EXECUTOR] [FOK {i}] ✓ DRY_RUN: Simulated success")
                     total_sold += chunk
@@ -965,9 +965,9 @@ class OrderExecutor:
                         making_amount = float(api_result.get("makingAmount", 0))  # Contracts sold
                         order_id = api_result.get("orderID", "N/A")
                         
-                        # 🔥 CRITICAL CHECK: FOK_ORDER_NOT_FILLED or amounts = 0
+                        # 🔥 关键检查：FOK_ORDER_NOT_FILLED 或金额为 0
                         if error_msg and ("FOK_ORDER_NOT_FILLED" in error_msg or "not filled" in error_msg.lower()):
-                            # FOK couldn't be fully filled - this is FAILURE!
+                            # FOK 无法完全成交 - 这是失败！
                             print(f"[EXECUTOR] [FOK {i}] ❌ NOT FILLED (attempt {attempt}): {error_msg}")
                             if attempt == MAX_CHUNK_RETRIES:
                                 log_sell_result(
@@ -985,7 +985,7 @@ class OrderExecutor:
                             # Continue retry loop
                             
                         elif taking_amount == 0 or making_amount == 0:
-                            # Amounts = 0 means nothing was sold!
+                            # 金额为 0 表示未卖出任何东西！
                             print(f"[EXECUTOR] [FOK {i}] ❌ ZERO FILL (attempt {attempt}): taking={taking_amount}, making={making_amount}")
                             if attempt == MAX_CHUNK_RETRIES:
                                 log_sell_result(
@@ -1003,10 +1003,10 @@ class OrderExecutor:
                             # Continue retry loop
                             
                         else:
-                            # ✅ REAL SUCCESS - there's a fill!
+                            # ✅ 真正成功 - 有成交！
                             filled = making_amount
                             received = taking_amount
-                            
+
                             total_sold += filled
                             total_received_usd += received
                             successful_chunks += 1
@@ -1019,7 +1019,7 @@ class OrderExecutor:
                             if error_msg:
                                 print(f"[EXECUTOR]    Warning: {error_msg}")
                             
-                            # Log success
+                            # 记录成功
                             try:
                                 log_sell_result(
                                     market_slug=market_slug,
@@ -1035,7 +1035,7 @@ class OrderExecutor:
                             except Exception as log_err:
                                 print(f"[EXECUTOR] ⚠️ Logging error: {log_err}")
                             
-                            # Notify balance change
+                            # 通知余额变化
                             if self.balance_change_callback:
                                 try:
                                     self.balance_change_callback(received, "SELL")
@@ -1045,7 +1045,7 @@ class OrderExecutor:
                             break  # ← Exit retry loop, go to next chunk
                     
                     else:
-                        # ❌ FAILED → instant retry (NO pause!)
+                        # ❌ 失败 → 立即重试（无暂停！）
                         error = api_result.get("errorMsg", "UNKNOWN") if api_result else "NO_API_RESPONSE"
                         print(f"[EXECUTOR] [FOK {i}] ❌ FAILED (attempt {attempt}): {error}")
                         
@@ -1273,7 +1273,7 @@ class OrderExecutor:
                 except Exception as e:
                     print(f"[EXECUTOR] [SWEEP {sweep_attempt}] ❌ EXCEPTION: {e}")
                 
-                # Retry delay (except last attempt)
+                # 重试延迟（最后一次除外）
                 if sweep_attempt < SWEEP_MAX_ATTEMPTS and not sweep_success:
                     print(f"[EXECUTOR] Waiting {SWEEP_RETRY_DELAY}s before retry...")
                     time.sleep(SWEEP_RETRY_DELAY)
@@ -1294,8 +1294,8 @@ class OrderExecutor:
             print(f"[EXECUTOR]    Final balance: {final_balance:.4f}")
             
             # ═══════════════════════════════════════════════════════════
-            # 🔥 FIX 3: SWEEP FALLBACK (FOK → FAK → Market)
-            # If FOK didn't pass, try FAK and Market order
+            # 🔥 修复 3: 清仓回退（FOK → FAK → 市价）
+            # 如果 FOK 未通过，尝试 FAK 和市价单
             # ═══════════════════════════════════════════════════════════
             SWEEP_ENABLE_FALLBACK = exec_config.get('sweep_enable_fallback', False)
             SWEEP_FAK_ATTEMPTS = exec_config.get('sweep_fak_attempts', 2)
@@ -1306,7 +1306,7 @@ class OrderExecutor:
                 print(f"[EXECUTOR] FOK failed, trying FAK → Market order")
                 
                 # ─────────────────────────────────────────────────────
-                # FALLBACK #1: FAK (Fill-And-Kill)
+                # 回退 #1: FAK（填单即撤销）
                 # ─────────────────────────────────────────────────────
                 print(f"\n[EXECUTOR] [FALLBACK FAK] Attempting FAK orders...")
                 
@@ -1317,7 +1317,7 @@ class OrderExecutor:
                     fak_start = time.time()
                     print(f"\n[EXECUTOR] [FAK {fak_attempt}/{SWEEP_FAK_ATTEMPTS}] Selling {final_balance:.2f} @ ${PRICE:.2f}...")
                     
-                    # 📝 LOG: FAK attempt
+                    # 📝 日志：FAK 尝试
                     log_sell_attempt(
                         market_slug=market_slug,
                         side=f"{side}_SWEEP_FAK",
@@ -1327,7 +1327,7 @@ class OrderExecutor:
                         max_attempts=SWEEP_FAK_ATTEMPTS
                     )
                     
-                    # DRY RUN check
+                    # 检查 DRY RUN
                     if self.safety.dry_run:
                         print(f"[EXECUTOR] [FAK {fak_attempt}] ✓ DRY_RUN: Simulated success")
                         total_sold += final_balance
@@ -1335,7 +1335,7 @@ class OrderExecutor:
                         final_balance = 0.0
                         break
                     
-                    # Send FAK order
+                    # 发送 FAK 订单
                     try:
                         order_args = OrderArgs(
                             price=PRICE,
@@ -1349,7 +1349,7 @@ class OrderExecutor:
                         
                         fak_elapsed = int((time.time() - fak_start) * 1000)
                         
-                        # 🔥 DEBUG: Log full API response
+                        # 🔥 调试：记录完整 API 响应
                         print(f"[EXECUTOR] [FAK {fak_attempt}] API Response:")
                         print(f"[EXECUTOR]    Raw: {api_result}")
                         
@@ -1358,7 +1358,7 @@ class OrderExecutor:
                             making_amount = float(api_result.get("makingAmount", 0))
                             
                             if taking_amount > 0 and making_amount > 0:
-                                # ✅ Partial or full sale
+                                # ✅ 部分或全部卖出
                                 filled = making_amount
                                 received = taking_amount
                                 
@@ -1370,7 +1370,7 @@ class OrderExecutor:
                                 print(f"[EXECUTOR]    Received: ${received:.2f}")
                                 print(f"[EXECUTOR]    Time: {fak_elapsed}ms")
                                 
-                                # Log success
+                                # 记录成功
                                 try:
                                     log_sell_result(
                                         market_slug=market_slug,
@@ -1386,13 +1386,13 @@ class OrderExecutor:
                                 except Exception as log_err:
                                     print(f"[EXECUTOR] ⚠️ Logging error: {log_err}")
                                 
-                                # Re-check balance
+                                # 重新检查余额
                                 final_balance = self.get_blockchain_token_balance(token_id)
                                 if final_balance is None or final_balance < MIN_DUST_THRESHOLD:
                                     final_balance = 0.0
                                     break
                             else:
-                                # ❌ Not sold
+                                # ❌ 未卖出
                                 print(f"[EXECUTOR] [FAK {fak_attempt}] ❌ NO FILL")
                         else:
                             error = api_result.get("errorMsg", "UNKNOWN") if api_result else "NO_API_RESPONSE"
@@ -1401,13 +1401,13 @@ class OrderExecutor:
                     except Exception as e:
                         print(f"[EXECUTOR] [FAK {fak_attempt}] ❌ EXCEPTION: {e}")
                     
-                    # Delay before next attempt
+                    # 下次尝试前延迟
                     if fak_attempt < SWEEP_FAK_ATTEMPTS and final_balance > MIN_DUST_THRESHOLD:
                         time.sleep(SWEEP_RETRY_DELAY)
                 
                 # ─────────────────────────────────────────────────────
-                # FALLBACK #2: MARKET ORDER (GTC - Good Till Cancelled)
-                # Guaranteed sale at any price
+                # 回退 #2: 市价单（GTC - 取消前有效）
+                # 以任意价格保证卖出
                 # ─────────────────────────────────────────────────────
                 if final_balance > MIN_DUST_THRESHOLD:
                     print(f"\n[EXECUTOR] [FALLBACK MARKET] FAK failed, trying Market order...")
@@ -1416,7 +1416,7 @@ class OrderExecutor:
                     market_start = time.time()
                     print(f"\n[EXECUTOR] [MARKET] Selling {final_balance:.2f} @ ${SWEEP_MARKET_PRICE:.2f}...")
                     
-                    # 📝 LOG: Market order attempt
+                    # 📝 日志：市价单尝试
                     log_sell_attempt(
                         market_slug=market_slug,
                         side=f"{side}_SWEEP_MARKET",
@@ -1426,14 +1426,14 @@ class OrderExecutor:
                         max_attempts=1
                     )
                     
-                    # DRY RUN check
+                    # 检查 DRY RUN
                     if self.safety.dry_run:
                         print(f"[EXECUTOR] [MARKET] ✓ DRY_RUN: Simulated success")
                         total_sold += final_balance
                         total_received_usd += final_balance * SWEEP_MARKET_PRICE
                         final_balance = 0.0
                     else:
-                        # Send Market order (GTC)
+                        # 发送市价单（GTC）
                         try:
                             order_args = OrderArgs(
                                 price=SWEEP_MARKET_PRICE,
@@ -1456,7 +1456,7 @@ class OrderExecutor:
                                 making_amount = float(api_result.get("makingAmount", 0))
                                 
                                 if taking_amount > 0 and making_amount > 0:
-                                    # ✅ SUCCESS
+                                    # ✅ 成功
                                     filled = making_amount
                                     received = taking_amount
                                     
@@ -1469,7 +1469,7 @@ class OrderExecutor:
                                     print(f"[EXECUTOR]    Actual price: ${received/filled:.4f}")
                                     print(f"[EXECUTOR]    Time: {market_elapsed}ms")
                                     
-                                    # Log success
+                                    # 记录成功
                                     try:
                                         log_sell_result(
                                             market_slug=market_slug,
@@ -1485,7 +1485,7 @@ class OrderExecutor:
                                     except Exception as log_err:
                                         print(f"[EXECUTOR] ⚠️ Logging error: {log_err}")
                                     
-                                    # Final balance check
+                                    # 最终余额检查
                                     final_balance = self.get_blockchain_token_balance(token_id)
                                     if final_balance is None:
                                         final_balance = 0.0
@@ -1502,8 +1502,8 @@ class OrderExecutor:
                 print(f"[EXECUTOR]    Final balance: {final_balance:.4f}")
         
         # ═══════════════════════════════════════════════════════════
-        # 🔥 DELAYED FINAL SWEEP (catch in-flight buys from race conditions)
-        # NOTE: Reporting moved AFTER delayed sweep for correct data!
+        # 🔥 延迟最终清仓（捕获竞态条件导致的飞行中买入）
+        # 注意：报告已移至延迟清仓之后以获取正确数据！
         # ═══════════════════════════════════════════════════════════
         DELAYED_SWEEP_ENABLED = exec_config.get('delayed_sweep_enabled', True)
         DELAYED_SWEEP_DELAY = exec_config.get('delayed_sweep_delay_sec', 5)
@@ -1521,7 +1521,7 @@ class OrderExecutor:
             print(f"[EXECUTOR] [DELAYED SWEEP] (Catching race conditions with blockchain)")
             time.sleep(DELAYED_SWEEP_DELAY)
             
-            # Re-fetch balance from blockchain
+            # 从区块链重新获取余额
             print(f"\n[EXECUTOR] [DELAYED SWEEP] STAGE 2: RE-FETCH BALANCE")
             print(f"[EXECUTOR] [DELAYED SWEEP] 🔄 Fetching REAL balance from blockchain...")
             delayed_balance = self.get_blockchain_token_balance(token_id)
@@ -1540,7 +1540,7 @@ class OrderExecutor:
                 delayed_success = False
                 
                 # ─────────────────────────────────────────────────────
-                # DELAYED SWEEP #1: FOK attempts
+                # 延迟清仓 #1: FOK 尝试
                 # ─────────────────────────────────────────────────────
                 print(f"\n[EXECUTOR] [DELAYED FOK] Attempting FOK orders...")
                 
@@ -1591,7 +1591,7 @@ class OrderExecutor:
                             elif taking_amount == 0 or making_amount == 0:
                                 print(f"[EXECUTOR] [DELAYED FOK {fok_attempt}] ❌ ZERO FILL")
                             else:
-                                # ✅ SUCCESS!
+                                # ✅ 成功！
                                 filled = making_amount
                                 received = taking_amount
                                 
@@ -1615,7 +1615,7 @@ class OrderExecutor:
                                     elapsed_ms=fok_elapsed
                                 )
                                 
-                                # Re-check balance
+                                # 重新检查余额
                                 delayed_balance = self.get_blockchain_token_balance(token_id)
                                 if delayed_balance is None or delayed_balance < DELAYED_SWEEP_MIN_BALANCE:
                                     delayed_balance = 0.0
@@ -1628,7 +1628,7 @@ class OrderExecutor:
                         time.sleep(DELAYED_SWEEP_RETRY_DELAY)
                 
                 # ─────────────────────────────────────────────────────
-                # DELAYED SWEEP #2: FAK attempts (if FOK failed)
+                # 延迟清仓 #2: FAK 尝试（如果 FOK 失败）
                 # ─────────────────────────────────────────────────────
                 if not delayed_success and delayed_balance > DELAYED_SWEEP_MIN_BALANCE:
                     print(f"\n[EXECUTOR] [DELAYED FAK] FOK failed, trying FAK orders...")
@@ -1675,7 +1675,7 @@ class OrderExecutor:
                                 making_amount = float(api_result.get("makingAmount", 0))
                                 
                                 if taking_amount > 0 and making_amount > 0:
-                                    # ✅ Partial or full fill
+                                    # ✅ 部分或全部成交
                                     filled = making_amount
                                     received = taking_amount
                                     
@@ -1699,7 +1699,7 @@ class OrderExecutor:
                                         elapsed_ms=fak_elapsed
                                     )
                                     
-                                    # Re-check balance
+                                    # 重新检查余额
                                     delayed_balance = self.get_blockchain_token_balance(token_id)
                                     if delayed_balance is None or delayed_balance < DELAYED_SWEEP_MIN_BALANCE:
                                         delayed_balance = 0.0
@@ -1714,7 +1714,7 @@ class OrderExecutor:
                             time.sleep(DELAYED_SWEEP_RETRY_DELAY)
                 
                 # ─────────────────────────────────────────────────────
-                # DELAYED SWEEP #3: Market order (if FAK failed)
+                # 延迟清仓 #3: 市价单（如果 FAK 失败）
                 # ─────────────────────────────────────────────────────
                 if not delayed_success and delayed_balance > DELAYED_SWEEP_MIN_BALANCE:
                     print(f"\n[EXECUTOR] [DELAYED MARKET] FAK failed, trying Market order...")
@@ -1780,7 +1780,7 @@ class OrderExecutor:
                                         elapsed_ms=market_elapsed
                                     )
                                     
-                                    # Final balance check
+                                    # 最终余额检查
                                     delayed_balance = self.get_blockchain_token_balance(token_id)
                                     if delayed_balance is None:
                                         delayed_balance = 0.0
@@ -1790,7 +1790,7 @@ class OrderExecutor:
                         except Exception as e:
                             print(f"[EXECUTOR] [DELAYED MARKET] ❌ EXCEPTION: {e}")
                 
-                # Update totals with delayed sweep results
+                # 使用延迟清仓结果更新总计
                 total_sold += delayed_sold
                 total_received_usd += delayed_received
                 final_balance = delayed_balance
@@ -1818,11 +1818,11 @@ class OrderExecutor:
                 final_balance = delayed_balance
         
         # ═══════════════════════════════════════════════════════════
-        # STEP 5: FINAL REPORT (AFTER DELAYED SWEEP!)
+        # 步骤 5: 最终报告（延迟清仓之后！）
         # ═══════════════════════════════════════════════════════════
         total_elapsed = time.time() - start_time
         
-        # 📝 LOG: Summary of FOK CHUNKED sell (with FINAL balance after delayed sweep)
+        # 📝 日志：FOK 分块卖出摘要（含延迟清仓后的最终余额）
         from trade_logger import trades_logger
         trades_logger.info(
             f"FOK_CHUNKED_COMPLETE | Market: {market_slug} | Side: {side} | "
@@ -1848,7 +1848,7 @@ class OrderExecutor:
         print(f"[EXECUTOR] Total Time: {total_elapsed:.1f}s")
         print(f"[EXECUTOR] {'='*60}\n")
         
-        # Check: did significant balance remain? (FINAL check!)
+        # 检查：是否仍有大量余额剩余？（最终检查！）
         if final_balance > MIN_DUST_THRESHOLD:
             warning_msg = (
                 f"⚠️ WARNING: Significant balance remains!\n"
@@ -1871,7 +1871,7 @@ class OrderExecutor:
             print(f"[EXECUTOR] ⚠️  Sending Telegram alert for FINAL remaining balance...")
             self._send_telegram_alert(warning_msg)
             
-            # Success = False if >10% remains
+            # 如果剩余超过 10% 则成功 = False
             success = (final_balance / initial_balance) < 0.1
         else:
             print(f"[EXECUTOR] ✅ SUCCESS: All sold (remaining = dust)")
@@ -1879,7 +1879,7 @@ class OrderExecutor:
         
         avg_price = total_received_usd / total_sold if total_sold > 0 else 0.0
         
-        # 🔥 FIX 4: Final logging of remaining balance for redeem
+        # 🔥 修复 4: 记录剩余余额以供赎回
         if final_balance > MIN_DUST_THRESHOLD:
             print(f"\n[EXECUTOR] ⚠️  WARNING: Remaining balance detected!")
             print(f"[EXECUTOR]    Token: {token_id}")
@@ -1900,9 +1900,9 @@ class OrderExecutor:
     
     def _send_telegram_alert(self, message: str):
         """
-        Send critical notification to Telegram
+        向 Telegram 发送关键通知
         """
-        print(f"[EXECUTOR] [TELEGRAM] {message[:100]}...")  # Debug
+        print(f"[EXECUTOR] [TELEGRAM] {message[:100]}...")  # 调试
         try:
             token = os.getenv("TELEGRAM_BOT_TOKEN")
             chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -1921,7 +1921,7 @@ class OrderExecutor:
     
     def _log_order(self, market_slug: str, side: str, contracts: float,
                    price: float, result: OrderResult, order_type: str, fak_attempt: int = 1):
-        """Write order to log (each FAK attempt separately)"""
+        """将订单写入日志（每次 FAK 尝试单独记录）"""
         log_entry = {
             'timestamp': time.time(),
             'datetime': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -1951,15 +1951,15 @@ class OrderExecutor:
                         up_token_id: str, down_token_id: str, 
                         neg_risk: bool = True) -> tuple[bool, float]:
         """
-        Redeem position for completed market.
-        Based on /root/clip/redeem.py - redeem_specific()
+        赎回已完成市场的仓位。
+        基于 /root/clip/redeem.py - redeem_specific()
         
         Args:
-            market_slug: Market identifier
-            condition_id: Condition ID for this market
-            up_token_id: Token ID for UP side
-            down_token_id: Token ID for DOWN side
-            neg_risk: Whether this is negative risk (default: True)
+            market_slug: 市场标识符
+            condition_id: 此市场的条件 ID
+            up_token_id: UP 方的令牌 ID
+            down_token_id: DOWN 方的令牌 ID
+            neg_risk: 是否为负风险（默认：True）
             
         Returns:
             (success: bool, amount_usd: float)
@@ -1970,7 +1970,7 @@ class OrderExecutor:
         
         print(f"[EXECUTOR] 📤 REDEEM: {market_slug}")
         
-        # Load redeem config
+        # 加载赎回配置
         redeem_cfg = self.config.get("execution", {}).get("redeem", {})
         gas_limit = redeem_cfg.get("gas_limit", 500000)
         gas_multiplier = redeem_cfg.get("gas_price_multiplier", 1.5)
@@ -1978,33 +1978,33 @@ class OrderExecutor:
         gas_retry_delay = 3
         
         try:
-            # Contract addresses
+            # 合约地址
             NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
             USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             
-            # Connect to Web3 (use first RPC endpoint)
+            # 连接到 Web3（使用第一个 RPC 端点）
             rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://polygon-rpc.com"
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             if not w3.is_connected():
                 print(f"[REDEEM] ❌ Cannot connect to RPC")
                 return False, 0.0
             
-            # CTF contract ABI
+            # CTF 合约 ABI
             CTF_ABI = [
                 {"inputs":[{"internalType":"address","name":"_collateralToken","type":"address"},{"internalType":"bytes32","name":"_parentCollectionId","type":"bytes32"},{"internalType":"bytes32","name":"_conditionId","type":"bytes32"},{"internalType":"uint256[]","name":"_partition","type":"uint256[]"},{"internalType":"uint256[]","name":"_amounts","type":"uint256[]"}],"name":"redeemPositions","outputs":[],"stateMutability":"nonpayable","type":"function"}
             ]
             
-            # Adapter ABI (for neg risk)
+            # 适配器 ABI（用于负风险）
             ADAPTER_ABI = [
                 {"inputs":[{"internalType":"address","name":"_operator","type":"address"},{"internalType":"address","name":"","type":"address"},{"internalType":"uint256[]","name":"_ids","type":"uint256[]"},{"internalType":"uint256[]","name":"_values","type":"uint256[]"},{"internalType":"bytes","name":"_data","type":"bytes"}],"name":"onERC1155BatchReceived","outputs":[{"internalType":"bytes4","name":"","type":"bytes4"}],"stateMutability":"nonpayable","type":"function"}
             ]
             
-            # Get wallet address
+            # 获取钱包地址
             wallet_address = self.client.creds.address
             print(f"[REDEEM] Wallet: {wallet_address}")
             
-            # TODO: Complete redeem implementation
-            # For now, return success to avoid errors
+            # TODO: 完成赎回实现
+            # 目前返回成功以避免错误
             print(f"[REDEEM] ⚠️  Redeem implementation incomplete")
             return (True, 0.0)
             
@@ -2012,15 +2012,15 @@ class OrderExecutor:
             print(f"[REDEEM] ❌ Error: {e}")
             return (False, 0.0)
         """
-        Send critical notification to Telegram
-        Used for CRITICAL errors (failed to sell everything)
+        向 Telegram 发送关键通知
+        用于严重错误（未能完全卖出）
         """
         try:
             token = os.getenv("TELEGRAM_BOT_TOKEN")
             chat_id = os.getenv("TELEGRAM_CHAT_ID")
             
             if not token or not chat_id:
-                # No Telegram configuration - silent fail
+                # 无 Telegram 配置 - 静默失败
                 return
             
             url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -2038,19 +2038,19 @@ class OrderExecutor:
                 print(f"[EXECUTOR] ⚠ Telegram alert failed: {response.status_code}")
                 
         except Exception as e:
-            # Silent fail - don't want Telegram error to break trading
+            # 静默失败 - 不想让 Telegram 错误中断交易
             print(f"[EXECUTOR] ⚠ Telegram exception: {e}")
     
     def _log_order(self, market_slug: str, side: str, contracts: float, 
                    price: float, result: OrderResult, order_type: str, fak_attempt: int = 1):
-        """Write order to log (each FAK attempt separately)"""
+        """将订单写入日志（每次 FAK 尝试单独记录）"""
         log_entry = {
             'timestamp': time.time(),
             'datetime': time.strftime('%Y-%m-%d %H:%M:%S'),
             'market_slug': market_slug,
             'side': side,
-            'order_type': order_type,  # BUY or SELL
-            'fak_attempt': fak_attempt,  # FAK attempt number
+            'order_type': order_type,  # BUY 或 SELL
+            'fak_attempt': fak_attempt,  # FAK 尝试编号
             'contracts': contracts,
             'price': price,
             'size_usd': contracts * price,
@@ -2070,15 +2070,15 @@ class OrderExecutor:
                         up_token_id: str, down_token_id: str, 
                         neg_risk: bool = True) -> tuple[bool, float]:
         """
-        Redeem position for completed market.
-        Based on /root/clip/redeem.py - redeem_specific()
+        赎回已完成市场的仓位。
+        基于 /root/clip/redeem.py - redeem_specific()
         
         Args:
-            market_slug: Market identifier
-            condition_id: CTF condition ID (hex string with 0x prefix)
-            up_token_id: Token ID for UP outcome
-            down_token_id: Token ID for DOWN outcome
-            neg_risk: If True, use NegRisk adapter; else use CTF directly
+            market_slug: 市场标识符
+            condition_id: CTF 条件 ID（带 0x 前缀的十六进制字符串）
+            up_token_id: UP 结果的令牌 ID
+            down_token_id: DOWN 结果的令牌 ID
+            neg_risk: 如果为 True，使用 NegRisk 适配器；否则直接使用 CTF
         
         Returns:
             (success: bool, amount_received_usd: float)
@@ -2087,26 +2087,26 @@ class OrderExecutor:
             print(f"[REDEEM DRY-RUN] Would redeem {market_slug}")
             return True, 0.0
         
-        # Load redeem config
+        # 加载赎回配置
         redeem_cfg = self.config.get("execution", {}).get("redeem", {})
         gas_limit = redeem_cfg.get("gas_limit", 500000)
         gas_multiplier = redeem_cfg.get("gas_price_multiplier", 1.5)
-        max_gas_retries = 5  # Max retries for gas price errors
-        gas_retry_delay = 3  # Seconds between retries
+        max_gas_retries = 5  # Gas 价格错误的最大重试次数
+        gas_retry_delay = 3  # 重试间隔秒数
         
         try:
-            # Contract addresses
+            # 合约地址
             NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
             USDC_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
             
-            # Connect to Web3 (use first RPC endpoint)
+            # 连接到 Web3（使用第一个 RPC 端点）
             rpc_url = self.rpc_endpoints[0] if self.rpc_endpoints else "https://polygon-rpc.com"
             w3 = Web3(Web3.HTTPProvider(rpc_url))
             if not w3.is_connected():
                 print(f"[REDEEM] ❌ Cannot connect to RPC")
                 return False, 0.0
             
-            # CTF contract ABI
+            # CTF 合约 ABI
             CTF_ABI = [
                 {"inputs": [{"name": "account", "type": "address"}, {"name": "id", "type": "uint256"}], 
                  "name": "balanceOf", "outputs": [{"name": "", "type": "uint256"}], 
@@ -2139,7 +2139,7 @@ class OrderExecutor:
                 abi=CTF_ABI
             )
             
-            # Check token balances
+            # 检查代币余额
             up_balance = ctf.functions.balanceOf(self.wallet_address, int(up_token_id)).call()
             down_balance = ctf.functions.balanceOf(self.wallet_address, int(down_token_id)).call()
             
@@ -2149,10 +2149,10 @@ class OrderExecutor:
             if up_balance == 0 and down_balance == 0:
                 self._log_redeem(market_slug, True, 0.0, "", "NO_TOKENS")
                 print(f"[REDEEM] ✅ No tokens to redeem (position already closed or never opened)")
-                # Return True to indicate completion (not an error requiring retry)
+                # 返回 True 表示完成（不是需要重试的错误）
                 return True, 0.0
             
-            # Check oracle resolution
+            # 检查预言机解析
             condition_bytes = Web3.to_bytes(hexstr=condition_id)
             payout_denom = ctf.functions.payoutDenominator(condition_bytes).call()
             
@@ -2161,18 +2161,18 @@ class OrderExecutor:
                 print(f"[REDEEM] ⚠ Oracle not resolved yet (payoutDenominator=0)")
                 return False, 0.0
             
-            # Check winner
+            # 检查赢家
             up_payout = ctf.functions.payoutNumerators(condition_bytes, 0).call()
             down_payout = ctf.functions.payoutNumerators(condition_bytes, 1).call()
             winner = "UP" if up_payout > 0 else "DOWN" if down_payout > 0 else "UNKNOWN"
             print(f"  Oracle resolved: {winner} won!")
             
-            # Build redeem transaction
+            # 构建赎回交易
             nonce = w3.eth.get_transaction_count(self.wallet_address)
             gas_price = w3.eth.gas_price
             
             if neg_risk:
-                # NegRisk markets (new BTC/ETH/SOL/XRP markets)
+                # NegRisk 市场（新的 BTC/ETH/SOL/XRP 市场）
                 adapter = w3.eth.contract(
                     address=Web3.to_checksum_address(NEG_RISK_ADAPTER),
                     abi=NEG_RISK_ABI
@@ -2188,12 +2188,12 @@ class OrderExecutor:
                     "gasPrice": int(gas_price * gas_multiplier),
                 })
             else:
-                # Standard CTF markets (old markets)
+                # 标准 CTF 市场（旧市场）
                 tx = ctf.functions.redeemPositions(
                     Web3.to_checksum_address(USDC_ADDRESS),
-                    bytes(32),  # parent_collection_id
+                    bytes(32),  # 父集合 ID
                     condition_bytes,
-                    [1, 2]  # index_sets
+                    [1, 2]  # 索引集合
                 ).build_transaction({
                     "chainId": 137,
                     "from": self.wallet_address,
@@ -2202,7 +2202,7 @@ class OrderExecutor:
                     "gasPrice": int(gas_price * gas_multiplier),
                 })
             
-            # Sign and send with retry logic for gas price errors
+            # 签名发送，带 Gas 价格错误的重试逻辑
             for retry_attempt in range(1, max_gas_retries + 1):
                 try:
                     signed_tx = w3.eth.account.sign_transaction(tx, private_key=self.private_key)
@@ -2214,41 +2214,41 @@ class OrderExecutor:
                     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
                     
                     if receipt.status == 1:
-                        # Calculate amount received (winner's balance)
+                        # 计算收到的金额（赢家的余额）
                         amount_received = (up_balance if up_payout > 0 else down_balance) / 1e6
                         winner = "UP" if up_payout > 0 else "DOWN"
                         self._log_redeem(market_slug, True, amount_received, tx_hash.hex(), f"WINNER_{winner}")
                         print(f"[REDEEM] ✅ Redeemed ${amount_received:.2f} USDC!")
                         print(f"[REDEEM] TX Hash: {tx_hash.hex()}")
                         
-                        # Wait 3 seconds before balance update (let blockchain settle)
+                        # 等待 3 秒再更新余额（让区块链结算）
                         import asyncio
                         try:
-                            # Try to use asyncio.sleep if in async context
+                            # 尝试在异步上下文中使用 asyncio.sleep
                             asyncio.get_event_loop()
                             import time
                             time.sleep(3)
                         except RuntimeError:
-                            # Not in async context, use regular sleep
+                            # 不在异步上下文中，使用常规 sleep
                             import time
                             time.sleep(3)
                         
                         print(f"[REDEEM] 🔄 Checking balance after 3s delay...")
                         
-                        # Refresh balance from blockchain for exact amount
+                        # 从区块链刷新余额以获得精确金额
                         try:
                             updated_balance = self.get_wallet_usdc_balance()
                             
                             if updated_balance is not None and updated_balance > 0:
                                 print(f"[REDEEM] 💰 Blockchain balance refreshed: ${updated_balance:.2f}")
                                 
-                                # Update local balance with exact value from blockchain
+                                # 使用区块链的精确值更新本地余额
                                 if self.balance_change_callback:
                                     self.balance_change_callback(updated_balance, "REDEEM_REFRESH", is_absolute=True)
                                     print(f"[REDEEM] ✅ Balance callback called with ${updated_balance:.2f}")
                             else:
                                 print(f"[REDEEM] ⚠️ Blockchain query returned None/0, using local update")
-                                # Fallback to local update
+                                # 回退到本地更新
                                 if self.balance_change_callback:
                                     self.balance_change_callback(+amount_received, "REDEEM")
                                     print(f"[REDEEM] ✅ Balance callback called with +${amount_received:.2f}")
@@ -2256,13 +2256,13 @@ class OrderExecutor:
                             print(f"[REDEEM] ⚠️ Failed to refresh balance: {e}")
                             import traceback
                             traceback.print_exc()
-                            # Fallback to local update
+                            # 回退到本地更新
                             if self.balance_change_callback:
                                 self.balance_change_callback(+amount_received, "REDEEM")
                                 print(f"[REDEEM] ✅ Balance callback called with +${amount_received:.2f} (fallback)")
                         
-                        # 🔥 UNBLOCK MARKET after successful redeem (per-coin)
-                        # Extract coin from market_slug (e.g., "btc-updown-15m-..." → "btc")
+                        # 🔥 成功赎回后解除市场锁定（按币种）
+                        # 从 market_slug 提取币种（例如 "btc-updown-15m-..." → "btc"）
                         coin = None
                         for c in ['btc', 'eth', 'sol', 'xrp']:
                             if f'{c}-updown-' in market_slug:
@@ -2284,7 +2284,7 @@ class OrderExecutor:
                 except Exception as send_error:
                     error_str = str(send_error)
                     
-                    # Check if it's the specific gas price error we want to retry
+                    # 检查是否是我们要重试的特定 Gas 价格错误
                     if 'replacement transaction underpriced' in error_str:
                         if retry_attempt < max_gas_retries:
                             print(f"[REDEEM] ⚠️ Gas price too low (attempt {retry_attempt}/{max_gas_retries})")
@@ -2293,10 +2293,10 @@ class OrderExecutor:
                             import time
                             time.sleep(gas_retry_delay)
                             
-                            # Increase gas price for retry
+                            # 增加 Gas 价格以重试
                             gas_multiplier *= 1.2
                             
-                            # Rebuild transaction with higher gas
+                            # 用更高的 Gas 重新构建交易
                             nonce = w3.eth.get_transaction_count(self.wallet_address)
                             gas_price = w3.eth.gas_price
                             
@@ -2329,13 +2329,13 @@ class OrderExecutor:
                                     "gasPrice": int(gas_price * gas_multiplier),
                                 })
                             
-                            continue  # Try again with new gas price
+                            continue  # 用新 Gas 价格重试
                         else:
                             print(f"[REDEEM] ❌ Failed after {max_gas_retries} gas price retries")
                             self._log_redeem(market_slug, False, 0.0, "", f"ERROR: {error_str[:100]}")
                             return False, 0.0
                     else:
-                        # Different error, don't retry
+                        # 其他错误，不重试
                         raise send_error
                 
         except Exception as e:

@@ -1,1 +1,1 @@
-"""Web dashboard package (Flask UI + API)."""
+"""Web 仪表盘包（Flask UI + API）"""

@@ -1,5 +1,5 @@
 """
-Build JSON-serializable dashboard snapshot from live trading objects.
+从实时交易对象构建 JSON 可序列化的仪表盘快照。
 """
 import time
 from typing import Any, Dict, List, Optional
@@ -17,6 +17,10 @@ def build_snapshot(
     dry_run: bool,
     markets_skipped: Dict[str, int],
 ) -> Dict[str, Any]:
+    """从实时交易对象构建 JSON 可序列化的仪表盘快照。
+    
+    包含每个币种的实时盘口、持仓、盈亏统计以及策略配置摘要。
+    """
     now = time.time()
     uptime = now - session_start_time
 

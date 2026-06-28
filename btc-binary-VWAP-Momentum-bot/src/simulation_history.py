@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Append-only simulation trading history for analysis (CSV, JSONL, summary JSON).
+模拟交易历史记录器：
+将 OPEN/CLOSE 事件写入 SQLite 数据库（通过 Database 模块），
+并可选导出 CSV/JSONL/JSON 摘要文件。
 
-Used only when config.simulation.enabled is True.
+数据持久化由 trading_stats（SQLite）自动处理；
+本模块负责日志记录和定期摘要输出。
 """
 
 from __future__ import annotations
@@ -11,10 +14,11 @@ import csv
 import json
 import logging
 import time
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from .database import Database
 
 logger = logging.getLogger("btc_live.simulation_history")
 
@@ -47,22 +51,43 @@ def _iso(ts: Optional[float] = None) -> str:
 
 class SimulationHistoryLogger:
     """
-    Logs each simulated OPEN and CLOSE with per-trade PnL and cumulative realized PnL.
+    记录模拟交易的 OPEN 和 CLOSE 事件到数据库，
+    并可选导出 CSV / JSONL / summary JSON 文件。
     """
 
     def __init__(
         self,
-        csv_path: str = "logs/simulation_trades.csv",
-        jsonl_path: Optional[str] = "logs/simulation_history.jsonl",
-        summary_path: str = "logs/simulation_summary.json",
+        db: Database,
+        mode: str = "simulation",
+        csv_path: str = "",
+        jsonl_path: str = "",
+        summary_path: str = "",
     ):
-        self.csv_path = Path(csv_path) if (csv_path or "").strip() else None
+        """
+        Args:
+            db: 数据库实例
+            mode: 'live' 或 'simulation'
+            csv_path: CSV 导出路径，空字符串则不导出
+            jsonl_path: JSONL 导出路径，空字符串则不导出
+            summary_path: 摘要 JSON 路径，空字符串则不导出
+        """
+        self._db = db
+        self._mode = mode
+
+        cp = (csv_path or "").strip()
+        self.csv_path = Path(cp) if cp else None
         jp = (jsonl_path or "").strip()
         self.jsonl_path = Path(jp) if jp else None
-        self.summary_path = Path(summary_path) if (summary_path or "").strip() else None
-        self._csv_header_written = (
-            bool(self.csv_path and self.csv_path.exists() and self.csv_path.stat().st_size > 0)
+        sp = (summary_path or "").strip()
+        self.summary_path = Path(sp) if sp else None
+
+        self._csv_header_written = bool(
+            self.csv_path
+            and self.csv_path.exists()
+            and self.csv_path.stat().st_size > 0
         )
+
+    # ── CSV / JSONL 辅助 ────────────────────────────────────────────────
 
     def _append_csv_row(self, row: Dict[str, Any]) -> None:
         if not self.csv_path:
@@ -83,6 +108,8 @@ class SimulationHistoryLogger:
         with open(self.jsonl_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
+    # ── 事件记录 ────────────────────────────────────────────────────────
+
     def log_open(
         self,
         *,
@@ -95,7 +122,7 @@ class SimulationHistoryLogger:
         hedged: bool,
         trade_number: int,
     ) -> None:
-        """trade_number = count of closed trades + 1 (this open is the Nth position)."""
+        """记录入场事件。trade_number = 已平仓交易数 + 1"""
         ts = time.time()
         row = {
             "event": "OPEN",
@@ -118,24 +145,22 @@ class SimulationHistoryLogger:
             "hedged": hedged,
         }
         self._append_csv_row(row)
-        self._append_jsonl(
-            {
-                "type": "open",
-                "time_utc": row["time_utc"],
-                "unix_ts": ts,
-                "market_slug": market_slug,
-                "side": token_name,
-                "contracts": contracts,
-                "avg_price": avg_price,
-                "entry_cost_usd": total_cost,
-                "cumulative_realized_pnl_usd": cumulative_realized_pnl,
-                "hedged": hedged,
-                "trade_number": trade_number,
-            }
-        )
+        self._append_jsonl({
+            "type": "open",
+            "time_utc": row["time_utc"],
+            "unix_ts": ts,
+            "market_slug": market_slug,
+            "side": token_name,
+            "contracts": contracts,
+            "avg_price": avg_price,
+            "entry_cost_usd": total_cost,
+            "cumulative_realized_pnl_usd": cumulative_realized_pnl,
+            "hedged": hedged,
+            "trade_number": trade_number,
+        })
         logger.info(
-            f"[SIM] OPEN {token_name} x{contracts} @ {avg_price:.4f} cost=${total_cost:.2f} | "
-            f"realized PnL so far ${cumulative_realized_pnl:+.4f}"
+            f"[SIM] OPEN {token_name} x{contracts} @ {avg_price:.4f} "
+            f"cost=${total_cost:.2f} | 已实现盈亏 ${cumulative_realized_pnl:+.4f}"
         )
 
     def log_close(
@@ -147,6 +172,7 @@ class SimulationHistoryLogger:
         win_rate_pct: float,
         hedged: bool,
     ) -> None:
+        """记录平仓事件"""
         ts = getattr(record, "timestamp", None) or time.time()
         row = {
             "event": "CLOSE",
@@ -169,34 +195,59 @@ class SimulationHistoryLogger:
             "hedged": hedged,
         }
         self._append_csv_row(row)
-        self._append_jsonl(
-            {
-                "type": "close",
-                "time_utc": row["time_utc"],
-                "unix_ts": ts,
-                "market_slug": record.market_slug,
-                "side": record.token_name,
-                "contracts": record.contracts,
-                "entry_price": record.entry_price,
-                "exit_price": record.exit_price,
-                "trade_pnl_usd": record.pnl,
-                "cumulative_pnl_usd": cumulative_pnl,
-                "won": record.won,
-                "trade_number": total_closed,
-                "total_closed_trades": total_closed,
-                "win_rate_pct": win_rate_pct,
-                "max_drawdown_abs": record.max_drawdown_abs,
-                "max_drawdown_pct": record.max_drawdown_pct,
-                "hedged": hedged,
-            }
-        )
+        self._append_jsonl({
+            "type": "close",
+            "time_utc": row["time_utc"],
+            "unix_ts": ts,
+            "market_slug": record.market_slug,
+            "side": record.token_name,
+            "contracts": record.contracts,
+            "entry_price": record.entry_price,
+            "exit_price": record.exit_price,
+            "trade_pnl_usd": record.pnl,
+            "cumulative_pnl_usd": cumulative_pnl,
+            "won": record.won,
+            "trade_number": total_closed,
+            "total_closed_trades": total_closed,
+            "win_rate_pct": win_rate_pct,
+            "max_drawdown_abs": record.max_drawdown_abs,
+            "max_drawdown_pct": record.max_drawdown_pct,
+            "hedged": hedged,
+        })
         logger.info(
-            f"[SIM] CLOSE #{total_closed} {record.token_name} PnL ${record.pnl:+.4f} | "
-            f"cumulative ${cumulative_pnl:+.4f} | WR {win_rate_pct:.1f}% ({total_closed} trades)"
+            f"[SIM] CLOSE #{total_closed} {record.token_name} "
+            f"盈亏 ${record.pnl:+.4f} | "
+            f"累计 ${cumulative_pnl:+.4f} | "
+            f"胜率 {win_rate_pct:.1f}% ({total_closed} 笔)"
         )
 
-    def write_summary(self, trades_as_dicts: List[Dict[str, Any]], summary: Dict[str, Any]) -> None:
-        """Full snapshot for quick analysis (includes all closed trades)."""
+    def write_summary(
+        self,
+        trades_as_dicts: List[Dict[str, Any]],
+        summary: Dict[str, Any],
+    ) -> None:
+        """
+        写入完整摘要快照（从数据库导出，用于快速分析）。
+
+        同时将资金快照写入数据库的 account_snapshots 表。
+        """
+        # 写入数据库快照
+        try:
+            account = self._db.get_account(self._mode)
+            capital = account["current_capital"] if account else 0.0
+            self._db.save_snapshot(
+                capital=capital,
+                realized_pnl=summary.get("total_pnl_usd", 0.0),
+                trade_count=summary.get("trade_count", 0),
+                win_count=summary.get("wins", 0),
+                loss_count=summary.get("losses", 0),
+                win_rate_pct=summary.get("win_rate_pct", 0.0),
+                mode=self._mode,
+            )
+        except Exception as e:
+            logger.warning(f"保存资金快照失败: {e}")
+
+        # 写入 JSON 摘要文件
         if not self.summary_path:
             return
         self.summary_path.parent.mkdir(parents=True, exist_ok=True)

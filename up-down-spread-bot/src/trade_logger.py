@@ -1,5 +1,5 @@
 """
-Trade Logger - Detailed logging of all buy/sell operations
+交易记录器——记录所有买入/卖出操作的详细信息
 """
 import json
 import logging
@@ -7,8 +7,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict
 
-# Setup trades logger
-# Determine logs path relative to project
+# 设置交易记录器
+# 确定日志路径（相对于项目根目录）
 project_root = Path(__file__).parent.parent
 log_dir = project_root / "logs"
 log_dir.mkdir(exist_ok=True)
@@ -23,7 +23,7 @@ trades_handler.setFormatter(logging.Formatter(
 trades_logger.addHandler(trades_handler)
 
 def log_buy_attempt(market_slug: str, side: str, contracts: float, price: float, attempt: int, max_attempts: int):
-    """Log a buy order attempt"""
+    """记录买入订单尝试"""
     trades_logger.info(
         f"BUY_ATTEMPT | Market: {market_slug} | Side: {side} | "
         f"Contracts: {contracts:.2f} | Price: ${price:.4f} | "
@@ -35,7 +35,7 @@ def log_buy_result(market_slug: str, side: str,
                    requested_usd: float, filled_usd: float,
                    success: bool, error: Optional[str] = None,
                    fak_attempts: int = 1, elapsed_ms: int = 0):
-    """Log a buy order result"""
+    """记录买入订单结果"""
     fill_pct = (filled_contracts / requested_contracts * 100) if requested_contracts > 0 else 0
     
     if success:
@@ -55,7 +55,7 @@ def log_buy_result(market_slug: str, side: str,
         )
 
 def log_sell_attempt(market_slug: str, side: str, contracts: float, price: float, attempt: int, max_attempts: int):
-    """Log a sell order attempt"""
+    """记录卖出订单尝试"""
     trades_logger.info(
         f"SELL_ATTEMPT | Market: {market_slug} | Side: {side} | "
         f"Contracts: {contracts:.2f} | Price: ${price:.4f} | "
@@ -67,7 +67,7 @@ def log_sell_result(market_slug: str, side: str,
                     requested_usd: float, received_usd: float,
                     success: bool, error: Optional[str] = None,
                     fak_attempts: int = 1, elapsed_ms: int = 0):
-    """Log a sell order result"""
+    """记录卖出订单结果"""
     fill_pct = (sold_contracts / requested_contracts * 100) if requested_contracts > 0 else 0
     
     if success:
@@ -87,7 +87,7 @@ def log_sell_result(market_slug: str, side: str,
         )
 
 def log_position_summary(market_slug: str, position: Dict):
-    """Log position summary after trade"""
+    """交易后记录仓位摘要"""
     up_shares = position.get('UP', {}).get('total_shares', 0)
     down_shares = position.get('DOWN', {}).get('total_shares', 0)
     up_invested = position.get('UP', {}).get('total_invested', 0)
@@ -106,19 +106,19 @@ def log_exit_trigger(market_slug: str, exit_reason: str, coin: str = None,
                      unrealized_pnl: float = None, threshold_pnl: float = None,
                      time_remaining: int = None):
     """
-    🔥 NEW: Log exit triggers (stop-loss, flip-stop, emergency)
-    Works for all 4 coins (BTC, ETH, SOL, XRP)
-    Works for both sell types (stop-loss + flip-stop)
+    🔥 新增：记录退出触发器（止损、翻转止损、紧急退出）
+    适用于所有 4 个币种（BTC、ETH、SOL、XRP）
+    适用于两种卖出类型（止损 + 翻转止损）
     
-    Args:
-        market_slug: Market identifier
-        exit_reason: 'stop_loss', 'flip_stop', 'emergency_exit'
-        coin: Coin name (btc, eth, sol, xrp)
-        trigger_price: Current price that triggered exit
-        threshold_price: Threshold price (for flip-stop)
-        unrealized_pnl: Current unrealized PnL (for stop-loss)
-        threshold_pnl: Threshold PnL (for stop-loss)
-        time_remaining: Seconds until market end
+    参数：
+        market_slug: 市场标识符
+        exit_reason: 'stop_loss'、'flip_stop'、'emergency_exit'
+        coin: 币种名称（btc、eth、sol、xrp）
+        trigger_price: 触发退出的当前价格
+        threshold_price: 阈值价格（用于翻转止损）
+        unrealized_pnl: 当前未实现盈亏（用于止损）
+        threshold_pnl: 盈亏阈值（用于止损）
+        time_remaining: 距离市场结束的秒数
     """
     msg_parts = [f"EXIT_TRIGGER | Market: {market_slug}"]
     
@@ -147,12 +147,12 @@ def log_exit_trigger(market_slug: str, exit_reason: str, coin: str = None,
 
 def log_market_closing_blocked(market_slug: str, blocked_at: str):
     """
-    🔥 NEW: Log race condition protection - blocked buy orders
-    Works for all 4 coins (BTC, ETH, SOL, XRP)
+    🔥 新增：记录竞态条件保护——阻止买入订单
+    适用于所有 4 个币种（BTC、ETH、SOL、XRP）
     
-    Args:
-        market_slug: Market identifier
-        blocked_at: Where the block occurred (e.g. 'BUY_ORDER_INIT', 'BUY_ORDER_FAK_ATTEMPT_1')
+    参数：
+        market_slug: 市场标识符
+        blocked_at: 阻止发生的位置（例如 'BUY_ORDER_INIT'、'BUY_ORDER_FAK_ATTEMPT_1'）
     """
     trades_logger.warning(
         f"RACE_CONDITION_BLOCK | Market: {market_slug} | "

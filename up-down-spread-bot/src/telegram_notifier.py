@@ -1,6 +1,6 @@
 """
-Telegram Notification System for Trading Bot
-Sends detailed market updates after each trade - NO SPAM!
+交易机器人的电报通知系统
+每次交易后发送详细的市场更新 - 不发送垃圾信息！
 """
 import os
 import time
@@ -17,51 +17,51 @@ load_dotenv("/root/4coins_live/.env")
 
 class TelegramNotifier:
     """
-    Non-blocking Telegram notification sender with rate limiting
+    非阻塞电报通知发送器，带速率限制
     
-    Features:
-    - Background thread for sending
-    - Rate limiting (2 msg/sec max to avoid spam)
-    - Graceful error handling (never crashes main process)
-    - Queue-based with drop counter
-    - ONLY market close/skip notifications (no startup spam)
+    功能特点：
+    - 后台线程发送
+    - 速率限制（每秒最多 2 条消息以防止垃圾信息）
+    - 优雅的错误处理（永不崩溃主进程）
+    - 基于队列并带丢弃计数器
+    - 仅市场关闭/跳过通知（无启动时的垃圾信息）
     """
     
     def __init__(self, bot_token: str = None, chat_id: str = None, rate_limit: float = 2.0, event_callback=None):
         """
-        Initialize Telegram notifier
+        初始化电报通知器
         
-        Args:
-            bot_token: Telegram bot token (from @BotFather)
-            chat_id: Telegram chat ID (your user ID)
-            rate_limit: Max messages per second (default: 2)
-            event_callback: Callback function(message, event_type) for logging events
+        参数：
+            bot_token: 电报机器人 token（来自 @BotFather）
+            chat_id: 电报聊天 ID（您的用户 ID）
+            rate_limit: 每秒最大消息数（默认：2）
+            event_callback: 用于记录事件日志的回调函数(message, event_type)
         """
-        # Get from env if not provided
+        # 如果未提供则从环境变量获取
         self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
         self.event_callback = event_callback
         
-        # Configuration
+        # 配置
         self.rate_limit = rate_limit
         self.min_interval = 1.0 / rate_limit
         self.last_send_time = 0.0
         
-        # Queue for messages
-        self.queue = Queue(maxsize=30)  # Small queue - only market notifications
+        # 消息队列
+        self.queue = Queue(maxsize=30)  # 小队列 - 仅市场通知
         self.running = True
         self.enabled = bool(self.bot_token and self.chat_id)
         
-        # Statistics
+        # 统计
         self.dropped_count = 0
         self.sent_count = 0
         self.error_count = 0
         self.last_error_time = 0.0
         
-        # Session tracking
+        # 会话跟踪
         self.session_start_time = time.time()
         
-        # Start worker thread if enabled
+        # 如果启用则启动工作线程
         if self.enabled:
             self.thread = Thread(target=self._worker, daemon=True, name="TelegramNotifier")
             self.thread.start()
@@ -72,21 +72,21 @@ class TelegramNotifier:
                 self.event_callback("Telegram disabled (no credentials)", 'info')
     
     def _worker(self):
-        """Background worker that sends messages from queue"""
+        """从队列发送消息的后台工作线程"""
         while self.running:
             try:
-                # Get message with timeout
+                # 带超时获取消息
                 msg = self.queue.get(timeout=1.0)
                 if msg is None:
                     continue
                 
-                # Rate limiting
+                # 速率限制
                 now = time.time()
                 elapsed = now - self.last_send_time
                 if elapsed < self.min_interval:
                     time.sleep(self.min_interval - elapsed)
                 
-                # Send message
+                # 发送消息
                 if self._send(msg):
                     self.sent_count += 1
                 else:
@@ -97,16 +97,16 @@ class TelegramNotifier:
             except Empty:
                 continue
             except Exception:
-                # Silent error handling
+                # 静默错误处理
                 self.error_count += 1
                 pass
     
     def _send(self, message: str) -> bool:
         """
-        Send message to Telegram (with timeout)
+        发送消息到电报（带超时）
         
-        Returns:
-            True if sent successfully, False otherwise
+        返回：
+            True 如果发送成功，否则 False
         """
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
@@ -120,7 +120,7 @@ class TelegramNotifier:
             return response.status_code == 200
             
         except Exception as e:
-            # Only log error once per minute to avoid spam
+            # 每分钟仅记录一次错误以避免日志泛滥
             now = time.time()
             if now - self.last_error_time > 60:
                 if self.event_callback:
@@ -130,10 +130,10 @@ class TelegramNotifier:
     
     def notify(self, message: str):
         """
-        Queue a notification (non-blocking)
+        将通知加入队列（非阻塞）
         
-        Args:
-            message: Message text (HTML formatting supported)
+        参数：
+            message: 消息文本（支持 HTML 格式）
         """
         if not self.enabled:
             return
@@ -145,21 +145,21 @@ class TelegramNotifier:
     
     def send_market_closed(self, coin: str, trade: Dict, session_stats: Dict, portfolio_stats: Dict = None):
         """
-        Send compact notification when a market closes with trade
+        市场关闭且有交易时发送紧凑通知
         
-        Args:
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
-            trade: Trade result dict from trader
-            session_stats: Session statistics for this coin
-            portfolio_stats: Optional portfolio stats for all coins
+        参数：
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
+            trade: 来自交易器的交易结果字典
+            session_stats: 该币种的会话统计
+            portfolio_stats: 可选的所有币种投资组合统计
         """
-        # Extract trade data
+        # 提取交易数据
         market_slug = trade.get('market_slug', 'unknown')
         pnl = trade.get('pnl', 0)
         roi_pct = trade.get('roi_pct', 0)
         winner = trade.get('winner', '?')
         
-        # Determine result emoji
+        # 确定结果表情符号
         if pnl > 0:
             result_emoji = "🟢"
             result_text = "WIN"
@@ -167,27 +167,27 @@ class TelegramNotifier:
             result_emoji = "🔴"
             result_text = "LOSS"
         
-        # Format PnL
+        # 格式化盈亏
         pnl_str = f"${pnl:+.2f}"
         roi_str = f"{roi_pct:+.1f}%"
         
-        # Market ID (short)
+        # 市场 ID（简短）
         market_id = market_slug.split('-')[-1][:10] if '-' in market_slug else market_slug[-10:]
         
-        # Build compact message
+        # 构建紧凑消息
         message = f"""<b>{coin.upper()}</b> {result_emoji} {result_text}
 ━━━━━━━━━━━━━━━
 Market: ...{market_id}
 PnL: {pnl_str} ({roi_str})
 Winner: {winner}"""
         
-        # Session summary (compact)
+        # 会话摘要（紧凑）
         total_pnl = session_stats.get('total_pnl', 0)
         win_rate = session_stats.get('win_rate', 0)
         
         message += f"\nTotal: ${total_pnl:+.2f} | WR: {win_rate:.0f}%"
         
-        # Portfolio stats (all coins)
+        # 投资组合统计（所有币种）
         if portfolio_stats:
             message += "\n\n━━━━━━━━━━━━━━━\n<b>🏦 PORTFOLIO</b>"
             
@@ -197,12 +197,12 @@ Winner: {winner}"""
                 c_wr = portfolio_stats.get(f'{c}_wr', 0)
                 c_markets = portfolio_stats.get(f'{c}_markets_played', 0)
                 
-                # Emoji for PnL
+                # 盈亏表情符号
                 pnl_emoji = "🟢" if c_pnl > 0 else "🔴" if c_pnl < 0 else "⚪"
                 
                 message += f"\n{c.upper()}: {pnl_emoji} ${c_pnl:+.2f} ({c_wr:.0f}% WR, {c_markets}m)"
             
-            # Total
+            # 总计
             total_portfolio_pnl = portfolio_stats.get('total_pnl', 0)
             total_emoji = "🟢" if total_portfolio_pnl > 0 else "🔴" if total_portfolio_pnl < 0 else "⚪"
             uptime = portfolio_stats.get('uptime', 0)
@@ -210,36 +210,36 @@ Winner: {winner}"""
             
             message += f"\n<b>Total: {total_emoji} ${total_portfolio_pnl:+.2f}</b> | {uptime_str}"
         
-        # Send notification
+        # 发送通知
         self.notify(message)
     
     def send_market_skipped(self, coin: str, market_slug: str, skip_reason: str, session_stats: Dict, portfolio_stats: Dict = None):
         """
-        Send minimal notification when a market is skipped (no trades)
+        当市场被跳过（无交易）时发送最小化通知
         
-        Args:
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
-            market_slug: Market identifier (UNUSED)
-            skip_reason: Reason for skipping (UNUSED)
-            session_stats: Session statistics (UNUSED)
-            portfolio_stats: Portfolio stats (UNUSED)
+        参数：
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
+            market_slug: 市场标识（未使用）
+            skip_reason: 跳过原因（未使用）
+            session_stats: 会话统计（未使用）
+            portfolio_stats: 投资组合统计（未使用）
         """
-        # Ultra-minimal message: just coin + skipped
+        # 超精简消息：仅币种 + 已跳过
         message = f"<b>{coin.upper()}</b> ⏭️ SKIPPED"
         
-        # Send notification
+        # 发送通知
         self.notify(message)
     
     def send_photo(self, photo_path: str, caption: str = ""):
         """
-        Send photo to Telegram
+        发送照片到电报
         
-        Args:
-            photo_path: Path to image file
-            caption: Optional caption (HTML supported)
+        参数：
+            photo_path: 图片文件路径
+            caption: 可选说明文字（支持 HTML）
         
-        Returns:
-            True if sent successfully, False otherwise
+        返回：
+            True 如果发送成功，否则 False
         """
         if not self.enabled:
             return False
@@ -273,7 +273,7 @@ Winner: {winner}"""
             return False
     
     def _format_uptime(self, seconds: float) -> str:
-        """Format uptime in human-readable format"""
+        """将运行时间格式化为人类可读格式"""
         delta = timedelta(seconds=int(seconds))
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
@@ -286,7 +286,7 @@ Winner: {winner}"""
             return f"{minutes}m"
     
     def get_stats(self) -> Dict:
-        """Get notifier statistics"""
+        """获取通知器统计信息"""
         return {
             'enabled': self.enabled,
             'sent_count': self.sent_count,
@@ -296,7 +296,7 @@ Winner: {winner}"""
         }
     
     def stop(self):
-        """Stop the notifier"""
+        """停止通知器"""
         self.running = False
         if self.enabled and self.event_callback:
             self.event_callback(f"Stopped (sent:{self.sent_count} drop:{self.dropped_count} err:{self.error_count})", 'telegram')
@@ -305,18 +305,18 @@ Winner: {winner}"""
                                on_positions_command=None, on_redeem_command=None, on_redeem_callbacks=None,
                                on_shutdown_command=None, on_shutdown_callbacks=None):
         """
-        Start background thread to listen for Telegram commands
-        THREAD-SAFE: Runs in separate daemon thread with full error handling
+        启动后台线程监听电报命令
+        线程安全：在独立的后台线程中运行，带有完整的错误处理
         
-        Args:
-            on_chart_command: Callback function to call when /chart or /pnl command received
-            on_balance_command: Callback function to call when /balance command received
-            on_positions_command: Callback function to call when /t or /positions command received
-            on_redeem_command: Callback function to call when /r or /redeem command received
-            on_redeem_callbacks: Dict with callback functions for redeem buttons
+        参数：
+            on_chart_command: 收到 /chart 或 /pnl 命令时调用的回调函数
+            on_balance_command: 收到 /balance 命令时调用的回调函数
+            on_positions_command: 收到 /t 或 /positions 命令时调用的回调函数
+            on_redeem_command: 收到 /r 或 /redeem 命令时调用的回调函数
+            on_redeem_callbacks: 用于赎回按钮的回调函数字典
                                  {'redeem_all': func, 'redeem_position': func, 'redeem_cancel': func}
-            on_shutdown_command: Callback function to call when /off or /stop command received
-            on_shutdown_callbacks: Dict with callback functions for shutdown buttons
+            on_shutdown_command: 收到 /off 或 /stop 命令时调用的回调函数
+            on_shutdown_callbacks: 用于关闭按钮的回调函数字典
                                    {'shutdown_confirm': func, 'shutdown_cancel': func}
         """
         if not self.enabled:
@@ -325,6 +325,7 @@ Winner: {winner}"""
             return None
         
         def listener_thread():
+            """Telegram 长轮询监听线程：接收命令并处理。"""
             last_update_id = 0
             consecutive_errors = 0
             max_consecutive_errors = 10
@@ -334,17 +335,17 @@ Winner: {winner}"""
             
             while self.running:
                 try:
-                    # Long polling for updates (30s timeout)
+                    # 长轮询获取更新（30 秒超时）
                     url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
                     params = {
                         'offset': last_update_id + 1,
-                        'timeout': 30,  # Long polling - wait up to 30s for updates
-                        'allowed_updates': ['message', 'callback_query']  # Messages and button clicks
+                        'timeout': 30,  # 长轮询 - 最多等待 30 秒获取更新
+                        'allowed_updates': ['message', 'callback_query']  # 消息和按钮点击
                     }
                     
                     response = requests.get(url, params=params, timeout=35)
                     
-                    # Reset error counter on successful connection
+                    # 连接成功后重置错误计数器
                     consecutive_errors = 0
                     
                     if response.status_code != 200:
@@ -363,12 +364,12 @@ Winner: {winner}"""
                     
                     updates = data.get('result', [])
                     
-                    # Process all updates
+                    # 处理所有更新
                     for update in updates:
                         try:
                             last_update_id = update['update_id']
                             
-                            # Handle callback queries (button clicks)
+                            # 处理回调查询（按钮点击）
                             if 'callback_query' in update and on_redeem_callbacks:
                                 callback_query = update['callback_query']
                                 callback_data = callback_query.get('data', '')
@@ -376,14 +377,14 @@ Winner: {winner}"""
                                 message_id = callback_query['message']['message_id']
                                 from_chat_id = str(callback_query['from']['id'])
                                 
-                                # SECURITY: Only respond to callbacks from our chat_id
+                                # 安全措施：仅响应来自我们 chat_id 的回调
                                 if from_chat_id != self.chat_id:
                                     continue
                                 
                                 print(f"[TELEGRAM] Callback received: {callback_data}")
                                 
                                 try:
-                                    # Redeem callbacks
+                                    # 赎回回调
                                     if callback_data == "redeem_all":
                                         on_redeem_callbacks['redeem_all'](callback_id, message_id)
                                     
@@ -394,7 +395,7 @@ Winner: {winner}"""
                                     elif callback_data == "redeem_cancel":
                                         on_redeem_callbacks['redeem_cancel'](callback_id, message_id)
                                     
-                                    # Shutdown callbacks
+                                    # 关闭回调
                                     elif on_shutdown_callbacks:
                                         if callback_data.startswith("shutdown_confirm_"):
                                             pid = callback_data.split("_")[-1]
@@ -410,7 +411,7 @@ Winner: {winner}"""
                                 
                                 continue
                             
-                            # Handle regular messages
+                            # 处理常规消息
                             if 'message' not in update:
                                 continue
                             
@@ -423,18 +424,18 @@ Winner: {winner}"""
                             from_chat_id = str(message['chat']['id'])
                             from_user = message.get('from', {}).get('username', 'unknown')
                             
-                            # SECURITY: Only respond to messages from our chat_id
+                            # 安全措施：仅响应来自我们 chat_id 的消息
                             if from_chat_id != self.chat_id:
                                 if self.event_callback:
                                     self.event_callback(f"Unauthorized msg from {from_user}", 'error')
                                 continue
                             
-                            # Handle commands
+                            # 处理命令
                             if text in ['/chart', '/pnl', '/график']:
                                 if self.event_callback:
                                     self.event_callback(f"Received {text}", 'telegram')
                                 try:
-                                    # Call the callback (should be thread-safe!)
+                                    # 调用回调（应为线程安全！）
                                     on_chart_command()
                                 except Exception as e:
                                     error_msg = str(e)[:200]
@@ -514,22 +515,22 @@ Winner: {winner}"""
                                 self.send_message(help_text)
                             
                             elif text.startswith('/'):
-                                # Unknown command
+                                # 未知命令
                                 self.send_message(f"❌ Unknown command: {text}\nSend /help for available commands")
                         
                         except Exception as e:
-                            # Error processing individual update - log and continue
+                            # 处理单个更新时出错 - 记录日志并继续
                             if self.event_callback:
                                 self.event_callback(f"Update error: {str(e)[:40]}", 'error')
                             continue
                         
                 except requests.exceptions.Timeout:
-                    # Timeout is NORMAL for long polling - just continue
+                    # 超时对于长轮询是正常的 - 继续
                     continue
                 
                 except requests.exceptions.ConnectionError as e:
                     consecutive_errors += 1
-                    if self.event_callback and consecutive_errors % 5 == 1:  # Log every 5th error
+                    if self.event_callback and consecutive_errors % 5 == 1:  # 每第5个错误记录一次
                         self.event_callback(f"Connection error ({consecutive_errors})", 'error')
                     
                     if consecutive_errors >= max_consecutive_errors:
@@ -537,11 +538,11 @@ Winner: {winner}"""
                             self.event_callback("Too many errors, stopping listener", 'error')
                         break
                     
-                    time.sleep(min(10 * consecutive_errors, 60))  # Exponential backoff
+                    time.sleep(min(10 * consecutive_errors, 60))  # 指数退避
                     
                 except Exception as e:
                     consecutive_errors += 1
-                    if self.event_callback and consecutive_errors % 5 == 1:  # Log every 5th error
+                    if self.event_callback and consecutive_errors % 5 == 1:  # 每第5个错误记录一次
                         self.event_callback(f"Listener error ({consecutive_errors})", 'error')
                     
                     if consecutive_errors >= max_consecutive_errors:
@@ -554,8 +555,8 @@ Winner: {winner}"""
             if self.event_callback:
                 self.event_callback("Command listener stopped", 'telegram')
         
-        # Start listener in background daemon thread
-        # Daemon=True means thread will be killed when main program exits
+        # 在后台守护线程中启动监听器
+        # Daemon=True 意味着主程序退出时该线程将被终止
         thread = Thread(target=listener_thread, daemon=True, name="TelegramCommandListener")
         thread.start()
         
@@ -565,14 +566,14 @@ Winner: {winner}"""
     
     def send_message_with_buttons(self, text: str, buttons: list) -> int:
         """
-        Send message with Inline Keyboard buttons
+        发送带有内联键盘按钮的消息
         
-        Args:
-            text: Message text (supports HTML)
-            buttons: List of buttons [[{text, callback_data}, ...], ...]
+        参数：
+            text: 消息文本（支持 HTML）
+            buttons: 按钮列表 [[{text, callback_data}, ...], ...]
         
-        Returns:
-            message_id if successful, None on error
+        返回：
+            成功时返回 message_id，错误时返回 None
         """
         if not self.enabled:
             return None
@@ -605,15 +606,15 @@ Winner: {winner}"""
     
     def edit_message_text(self, message_id: int, text: str, buttons: list = None) -> bool:
         """
-        Edit text of existing message
+        编辑现有消息的文本
         
-        Args:
-            message_id: Message ID to edit
-            text: New text (supports HTML)
-            buttons: New buttons (optional)
+        参数：
+            message_id: 要编辑的消息 ID
+            text: 新文本（支持 HTML）
+            buttons: 新按钮（可选）
         
-        Returns:
-            True if successful
+        返回：
+            成功时返回 True
         """
         if not self.enabled:
             return False
@@ -645,15 +646,15 @@ Winner: {winner}"""
     
     def answer_callback_query(self, callback_query_id: str, text: str = "", show_alert: bool = False) -> bool:
         """
-        Answer callback query (show popup notification)
+        响应回调查询（显示弹出通知）
         
-        Args:
-            callback_query_id: ID callback query
-            text: Notification text
-            show_alert: Show as alert (True) or toast (False)
+        参数：
+            callback_query_id: 回调查询 ID
+            text: 通知文本
+            show_alert: 显示为弹窗（True）或提示（False）
         
-        Returns:
-            True if successful
+        返回：
+            成功时返回 True
         """
         if not self.enabled:
             return False
@@ -675,16 +676,16 @@ Winner: {winner}"""
     
     def send_message(self, message: str):
         """
-        Send plain text message to Telegram (for command responses)
-        Sends directly (not queued) since this is for immediate command responses
+        发送纯文本消息到电报（用于命令响应）
+        直接发送（不入队），用于即时命令响应
         
-        Args:
-            message: Text message to send
+        参数：
+            message: 要发送的文本消息
         """
         if not self.enabled:
             return False
         
-        # Send directly for immediate response (not queued)
+        # 直接发送以获取即时响应（不入队）
         try:
             url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
             data = {
@@ -718,11 +719,11 @@ _notifier_lock = Lock()
 
 
 def get_notifier() -> TelegramNotifier:
-    """Get or create the global Telegram notifier (singleton)"""
+    """获取或创建全局电报通知器（单例）"""
     global _notifier
     if _notifier is None:
         with _notifier_lock:
-            if _notifier is None:  # Double-check
+            if _notifier is None:  # 双重检查
                 _notifier = TelegramNotifier()
     return _notifier
 

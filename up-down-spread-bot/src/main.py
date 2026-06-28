@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Meridian — Polymarket 15-minute multi-asset trading system.
+Meridian — Polymarket 15分钟多资产交易系统。
 
-Four parallel traders (BTC, ETH, SOL, XRP), one wallet.
-Strategy: late-window entry (Late Entry V3 / late_v3).
+四个并行交易器 (BTC, ETH, SOL, XRP)，共用一个钱包。
+策略：窗口末期入场 (Late Entry V3 / late_v3)。
 """
 import argparse
 import json
@@ -29,41 +29,42 @@ from order_executor import OrderExecutor
 from keyboard_listener import KeyboardListener
 from market_config import apply_market_window_settings
 import trader as trader_module
+import db_manager  # SQLite database for trades, balances, balance changes
 
 
-# Global configuration constants
+# 全局配置常量
 STRATEGY_BASES = ['late_v3']
 COINS = ['btc', 'eth', 'sol', 'xrp']
 
-# Global stop flag
+# 全局停止标志
 stop_flag = False
 data_feed = None
-multi_trader_instance = None  # Will hold MultiTrader for graceful shutdown
-keyboard_listener = None  # Will hold KeyboardListener for cleanup
+multi_trader_instance = None  # 持有 MultiTrader 实例，用于优雅关闭
+keyboard_listener = None  # 持有 KeyboardListener 实例，用于清理
 
-# Global redeem positions cache for Telegram /r command
+# 全局赎回仓位缓存，供 Telegram /r 命令使用
 redeem_positions_cache = []
 redeem_cache_lock = threading.Lock()
 
 
 def signal_handler(sig, frame):
-    """Handle Ctrl+C gracefully"""
+    """处理 Ctrl+C 优雅关闭"""
     global stop_flag, data_feed, multi_trader_instance, keyboard_listener
     print("\n[SYSTEM] Shutdown signal received, stopping...")
     stop_flag = True
     
-    # Stop keyboard listener first
+    # 先停止键盘监听器
     if keyboard_listener:
         print("[KEYBOARD] Stopping listener...")
         keyboard_listener.stop()
     
-    # Stop data feed
+    # 停止数据推送
     if data_feed:
         print("[DATA] Stopping feeds...")
         data_feed.stop()
         print("[DATA] Feeds stopped")
     
-    # Save all active positions before exit
+    # 退出前保存所有活跃仓位
     if multi_trader_instance:
         print("[SHUTDOWN] Saving active positions...")
         saved_count = 0
@@ -72,8 +73,8 @@ def signal_handler(sig, frame):
                 print(f"[{strategy_name}] Has {len(trader.positions)} active position(s)")
                 for market_slug, pos in list(trader.positions.items()):
                     try:
-                        # Force-save position as emergency exit
-                        # We don't know the final price, so save current state
+                        # 强制保存仓位（应急退出）
+                        # 我们不知道最终价格，所以保存当前状态
                         trade = {
                             'market_slug': market_slug,
                             'strategy': strategy_name,
@@ -82,13 +83,13 @@ def signal_handler(sig, frame):
                             'up_invested': pos['UP']['invested'],
                             'down_invested': pos['DOWN']['invested'],
                             'total_invested': pos['UP']['invested'] + pos['DOWN']['invested'],
-                            'pnl': 0.0,  # Unknown - will calculate on next run
+                            'pnl': 0.0,  # 未知，下次运行时重新计算
                             'winner': 'UNKNOWN',
                             'closed_at': int(time.time()),
                             'btc_start': pos.get('btc_start', 0),
-                            'btc_final': 0,  # Unknown
+                            'btc_final': 0,  # 未知
                             'entries_count': pos.get('entries_count', 0),
-                            'status': 'EMERGENCY_SAVE'  # Mark as emergency
+                            'status': 'EMERGENCY_SAVE'  # 标记为应急保存
                         }
                         trader._log_trade(trade)
                         saved_count += 1
@@ -105,9 +106,9 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 def load_config(config_path: str = None) -> dict:
-    """Load configuration and resolve market_window → market_interval_sec."""
+    """加载配置，将 market_window 解析为 market_interval_sec。"""
     if config_path is None:
-        # Default to ../config/config.json relative to this file
+        # 默认路径：相对于本文件的 ../config/config.json
         config_path = Path(__file__).parent.parent / "config" / "config.json"
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
@@ -116,34 +117,34 @@ def load_config(config_path: str = None) -> dict:
 
 
 def _parse_cli_args():
-    """CLI for optional web dashboard."""
+    """CLI 参数解析，支持可选的 Web 仪表盘。"""
     p = argparse.ArgumentParser(description="Meridian — Polymarket 15m crypto desk")
     p.add_argument(
         "--web",
         action="store_true",
-        help="Serve web dashboard (Flask) in background for control + live analytics",
+        help="启动后台 Web 仪表盘 (Flask)，用于控制与实时分析",
     )
-    p.add_argument("--web-port", type=int, default=5050, help="Dashboard port (default 5050)")
+    p.add_argument("--web-port", type=int, default=5050, help="仪表盘端口（默认 5050）")
     p.add_argument(
         "--web-host",
         type=str,
         default="127.0.0.1",
-        help="Bind address (default 127.0.0.1; use 0.0.0.0 for LAN)",
+        help="绑定地址（默认 127.0.0.1；使用 0.0.0.0 开放局域网）",
     )
     return p.parse_args()
 
 
 def validate_system():
-    """Validate all components before starting"""
+    """启动前验证所有组件"""
     print("[VALIDATION] Testing sizing formulas...")
-    # Validation passed
+    # 验证通过
     
     print("[VALIDATION] All systems ready")
     return True
 
 
 def _get_portfolio_stats(multi_trader, markets_skipped, session_start_time):
-    """Helper to calculate portfolio statistics for Telegram notifications"""
+    """计算投资组合统计信息，用于 Telegram 通知"""
     stats = {}
     
     for coin in COINS:
@@ -171,21 +172,21 @@ def _get_portfolio_stats(multi_trader, markets_skipped, session_start_time):
 
 
 # ═══════════════════════════════════════════════════════════
-# GLOBAL STATE (for callbacks)
+# 全局状态（供回调函数使用）
 # ═══════════════════════════════════════════════════════════
-wallet_balance = 0.0  # Will be set in main() after wallet check
+wallet_balance = 0.0  # 在 main() 检查钱包后设置
 
 
 def validate_prices(up_ask: float, down_ask: float, up_timestamp: float, down_timestamp: float, 
                    coin: str = '', threshold_sec: float = 2.0) -> tuple:
     """
-    Validate that prices are synchronized and fresh
+    验证价格是否同步且新鲜
     
-    Returns: (is_valid: bool, reason: str)
+    返回: (is_valid: bool, reason: str)
     """
     now = time.time()
     
-    # Check 1: Freshness (prices updated recently)
+    # 检查1：新鲜度（价格是否最近更新）
     up_age = now - up_timestamp if up_timestamp > 0 else 999
     down_age = now - down_timestamp if down_timestamp > 0 else 999
     
@@ -194,12 +195,12 @@ def validate_prices(up_ask: float, down_ask: float, up_timestamp: float, down_ti
     if down_age > threshold_sec:
         return False, f"DOWN_STALE_{down_age:.1f}s"
     
-    # Check 2: Timestamp sync (both updated in same time window)
+    # 检查2：时间戳同步（两者在同一时间窗口内更新）
     if abs(up_timestamp - down_timestamp) > threshold_sec:
         return False, f"DESYNC_{abs(up_timestamp - down_timestamp):.1f}s"
     
-    # Check 3: Sum validation (UP + DOWN ≈ 1.0)
-    # Allow wider range (0.95-1.15) to account for spread and rapid price changes
+    # 检查3：总和验证 (UP + DOWN ≈ 1.0)
+    # 允许更宽范围 (0.95-1.15) 以容纳价差和快速价格变动
     price_sum = up_ask + down_ask
     if price_sum < 0.95 or price_sum > 1.15:
         return False, f"INVALID_SUM_{price_sum:.3f}"
@@ -208,23 +209,23 @@ def validate_prices(up_ask: float, down_ask: float, up_timestamp: float, down_ti
 
 
 def run_manual_redeem():
-    """Callback for manual redeem (M key)"""
+    """手动赎回回调（按 M 键触发）"""
     print("\n" + "="*80)
     print(" MANUAL REDEEM TRIGGERED ".center(80, "="))
     print("="*80 + "\n")
     
     try:
-        # Import the redeemall module directly
+        # 直接导入 redeemall 模块
         import sys
         sys.path.insert(0, "/root/clip")
         
-        # Load environment from 4coins_live
+        # 从 4coins_live 加载环境变量
         from dotenv import load_dotenv
         from pathlib import Path
         env_path = Path("/root/4coins_live/.env")
         load_dotenv(env_path, override=True)
         
-        # Import and run redeemall with auto-confirm
+        # 导入并运行 redeemall（自动确认）
         import redeemall
         print("[REDEEM] Starting automatic redemption...")
         print("[REDEEM] Using wallet from: /root/4coins_live/.env")
@@ -243,17 +244,17 @@ def run_manual_redeem():
     print(" Returning to trading... ".center(80))
     print("="*80 + "\n")
     
-    # Give user 2 seconds to see the result
+    # 给用户 2 秒查看结果
     time.sleep(2)
 
 
 def main(args=None):
-    """Main trading loop"""
+    """主交易循环"""
     global stop_flag, data_feed, wallet_balance, keyboard_listener
     if args is None:
         args = _parse_cli_args()
     
-    # Track session start time for uptime
+    # 记录会话启动时间（用于计算运行时长）
     session_start_time = time.time()
     
     config = load_config()
@@ -268,17 +269,17 @@ def main(args=None):
     print("=" * 115)
     print()
     
-    # Validate system
+    # 验证系统
     if not validate_system():
         print("[ERROR] System validation failed!")
         return
     
-    # Track skipped markets for each coin
+    # 跟踪每个币种跳过的市场
     markets_skipped = {coin: 0 for coin in COINS}
     
-    # Track completed markets for chart generation
+    # 跟踪已完结市场数量，用于图表生成
     total_completed_markets = 0
-    last_chart_at = 0  # Markets count when last chart was sent
+    last_chart_at = 0  # 上次发送图表时的市场计数
     CHART_INTERVAL = config.get('notifications', {}).get('chart_every_n_markets', 10)
     print(f"[CONFIG] Loaded configuration (Meridian · late-window entry + hybrid stop-loss)")
     _pm_cfg = config.get("data_sources", {}).get("polymarket", {})
@@ -293,7 +294,7 @@ def main(args=None):
     print(f"         Price Max: ${config['strategy']['price_max']}")
     print(f"         Exit #1: Hybrid Stop-Loss (per coin):")
     
-    # Dynamically derive from config
+    # 从配置动态推导
     for coin in ['btc', 'eth', 'sol', 'xrp']:
         sl_cfg = config.get('exit', {}).get('stop_loss', {}).get('per_coin', {}).get(coin, {})
         if sl_cfg.get('enabled'):
@@ -315,39 +316,63 @@ def main(args=None):
     print()
     
     # ═══════════════════════════════════════════════════════════
-    # SAFETY & REAL TRADING SETUP
+    # 安全与实盘交易设置
     # ═══════════════════════════════════════════════════════════
     
-    # Create SafetyGuard (pass ENTIRE config, SafetyGuard will take safety section itself)
+    # 创建 SafetyGuard（传入完整 config，SafetyGuard 自行提取安全配置部分）
     safety_guard = SafetyGuard(config)
     
-    # Create OrderExecutor (pass config for retry parameters!)
+    # 创建 OrderExecutor（传入 config 获取重试参数！）
     order_executor = OrderExecutor(safety_guard, config)
     
-    # Setup balance change callback to update global wallet_balance
+    # 设置余额变更回调，更新全局 wallet_balance
     def on_balance_change(amount: float, operation: str, is_absolute: bool = False):
         """
-        Callback for balance changes from OrderExecutor
+        余额变更回调（来自 OrderExecutor）
         
         Args:
-            amount: Amount changed (positive = received, negative = spent) or absolute balance
-            operation: Operation type ('BUY', 'SELL', 'REDEEM', 'REDEEM_REFRESH')
-            is_absolute: If True, amount is the new absolute balance (not a delta)
+            amount: 变更金额（正数=收到，负数=支出）或绝对余额
+            operation: 操作类型（'BUY', 'SELL', 'REDEEM', 'REDEEM_REFRESH'）
+            is_absolute: 若为 True，amount 为新的绝对余额（而非增量）
         """
         global wallet_balance
         try:
             if is_absolute:
-                # Absolute value from blockchain
+                # 来自区块链的绝对值
                 old_balance = wallet_balance
                 wallet_balance = amount
                 change = amount - old_balance
                 change_sign = "+" if change >= 0 else ""
                 print(f"[BALANCE] 🔄 Updated from blockchain: ${wallet_balance:,.2f} ({change_sign}${change:.2f})")
+                # 记录到数据库
+                try:
+                    db_manager.get_db().save_balance_snapshot(usdc_balance=wallet_balance, source='blockchain_refresh')
+                    if change != 0:
+                        db_manager.get_db().save_balance_change(
+                            amount=change,
+                            balance_before=old_balance,
+                            balance_after=wallet_balance,
+                            operation_type=operation.lower() if operation else "blockchain_update"
+                        )
+                except Exception as db_err:
+                    print(f"[BALANCE] ⚠️ DB log error: {db_err}")
             else:
-                # Delta change
+                # 增量变更
+                old_balance = wallet_balance
                 wallet_balance += amount
                 sign = "+" if amount >= 0 else ""
                 print(f"[BALANCE] 💰 {operation}: {sign}${amount:.2f} → ${wallet_balance:,.2f}")
+                # 记录到数据库
+                try:
+                    db_manager.get_db().save_balance_snapshot(usdc_balance=wallet_balance, source='trade_operation')
+                    db_manager.get_db().save_balance_change(
+                        amount=amount,
+                        balance_before=old_balance,
+                        balance_after=wallet_balance,
+                        operation_type=operation.lower() if operation else "unknown"
+                    )
+                except Exception as db_err:
+                    print(f"[BALANCE] ⚠️ DB log error: {db_err}")
         except Exception as e:
             print(f"[BALANCE] ⚠️ Callback error: {e}")
             import traceback
@@ -355,32 +380,32 @@ def main(args=None):
     
     order_executor.set_balance_callback(on_balance_change)
     
-    # Setup market closing check callback (race condition protection)
+    # 设置市场收盘检查回调（竞态条件保护）
     def is_market_closing(market_slug: str, coin: str) -> bool:
         """
-        Check: is market closing for SPECIFIC coin (stop-loss/flip-stop triggered)
+        检查：特定币种的市场是否正在关闭（止损/翻转止损已触发）
         
-        🔥 CRITICAL: Blocks buys if market_start_prices[coin] == -2
-        Prevents race condition when buy goes through AFTER trigger
+        🔥 关键：若 market_start_prices[coin] == -2 则阻止买入
+        防止在触发信号之后买入的竞态条件
         
         Args:
-            market_slug: Market identifier
-            coin: Coin name ('btc', 'eth', 'sol', 'xrp')
+            market_slug: 市场标识符
+            coin: 币种名称（'btc', 'eth', 'sol', 'xrp'）
         
         Returns:
-            True - market is closing for THIS coin, block buys
-            False - market is open for this coin, buys are allowed
+            True - 市场正在为此币种关闭，阻止买入
+            False - 市场对此币种开放，允许买入
         """
-        # Check ONLY for specified coin (per-coin blocking!)
+        # 仅检查指定币种（按币种隔离阻断！）
         if coin in market_start_prices:
             status = market_start_prices[coin].get(market_slug, None)
             if status == -2:
-                return True  # Market is closing for THIS coin!
-        return False  # Market is open for this coin
+                return True  # 市场正在为此币种关闭！
+        return False  # 市场对此币种开放
     
     order_executor.set_market_closing_check(is_market_closing)
     
-    # Check wallet balance (if not DRY_RUN)
+    # 检查钱包余额（若非 DRY_RUN）
     if not safety_guard.dry_run:
         print("\n[WALLET] Checking wallet balance...")
         wallet_balance = order_executor.get_wallet_usdc_balance()
@@ -398,30 +423,38 @@ def main(args=None):
         print("🔴 LIVE TRADING MODE - REAL MONEY")
         print("="*80 + "\n")
     else:
-        # DRY_RUN - use simulated balance
-        wallet_balance = 10000.0  # Simulated balance
+        # DRY_RUN - 使用模拟余额
+        wallet_balance = 10000.0  # 模拟余额
         print("\n" + "="*80)
         print(f"🟢 DRY_RUN MODE: Simulated balance ${wallet_balance:.2f}")
         print("   No real orders will be placed")
         print("="*80 + "\n")
     
-    # Inject executor into trader module
+    # 初始化 SQLite 数据库
+    db_manager.init_db()
+    print("[SYSTEM] ✓ SQLite database initialized (data/trading.db)")
+
+    # 记录初始余额快照
+    db_manager.get_db().save_balance_snapshot(usdc_balance=wallet_balance, source='startup')
+    print(f"[DB] Initial balance recorded: ${wallet_balance:.2f}")
+
+    # 将 executor 注入 trader 模块
     trader_module.set_order_executor(order_executor)
     print("[SYSTEM] ✓ OrderExecutor injected into trader module")
     
-    # 📂 Load metadata from disk (CRITICAL for redeem after restart!)
+    # 📂 从磁盘加载元数据（重启后赎回的关键！）
     trader_module.load_market_metadata_from_disk()
     print()
     
     # ═══════════════════════════════════════════════════════════
     
-    # Initialize data feed (shared across all strategies)
+    # 初始化数据源（所有策略共享）
     print("[SYSTEM] Initializing multi-market data feed...")
     data_feed = DataFeed(config)
     data_feed.start()
-    time.sleep(5)  # Let data stabilize
+    time.sleep(5)  # 等待数据稳定
     
-    # Initialize 2 strategies (1 base × 2 coins) using global constants
+    # 初始化 2 个策略（1 个基础策略 × 2 个币种）使用全局常量
     print(f"[SYSTEM] Initializing 2 parallel strategies...")
     strategies = {}
     strategy_names = []
@@ -437,16 +470,16 @@ def main(args=None):
     if _sample_st:
         print(f"         Effective entry window: last {_sample_st.entry_window}s | sizing tiers: >{_sample_st.sizing_t1}s / >{_sample_st.sizing_t2}s")
     
-    # Initialize multi-trader (unified wallet - no capital distribution)
+    # 初始化 multi-trader（统一钱包 - 无资金分配）
     global multi_trader_instance
     print("\n[SYSTEM] Initializing multi-trader...")
-    # Note: capital_per_strategy=0 because all strategies share one wallet balance
-    # Individual trader capital is only used for per-coin PnL statistics, not limits
+    # 注意：capital_per_strategy=0 因为所有策略共享同一个钱包余额
+    # 单个 trader 资金仅用于按币种 PnL 统计，而非限制
     multi_trader = MultiTrader(capital_per_strategy=0, strategy_names=strategy_names)
-    multi_trader_instance = multi_trader  # Store for graceful shutdown
+    multi_trader_instance = multi_trader  # 存储用于优雅关闭
     print()
     
-    # Initialize dashboard (pass config for trading status display)
+    # 初始化仪表盘（传入 config 用于交易状态显示）
     dashboard = DashboardMultiAB(width=160, coins=COINS, config=config)
     
     import web_dashboard_state as web_dashboard_state_mod
@@ -458,46 +491,46 @@ def main(args=None):
         print(f"[WEB] Dashboard: http://{args.web_host}:{args.web_port}/")
         print()
     
-    # Initialize Telegram notifier with event callback
+    # 初始化 Telegram 通知器（带事件回调）
     dashboard.add_event("Initializing Telegram notifier...", 'system')
     from telegram_notifier import TelegramNotifier
     notifier = TelegramNotifier(event_callback=lambda msg, t: dashboard.add_event(msg, t))
     
-    # Track market start prices for EACH coin separately
+    # 分别跟踪每个币种的市场起始价格
     # {coin: {market_slug: price or status}}
-    # Values: positive float (valid price), -1 (skipped - started mid-market)
+    # 值：正数（有效价格），-1（已跳过 - 中途开始）
     market_start_prices = {coin: {} for coin in COINS}
     
-    # Track pending markets for EACH coin separately
+    # 分别跟踪每个币种的待处理市场
     # {coin: {market_slug: {...}}}
     pending_markets = {coin: {} for coin in COINS}
     
-    # Track if we witnessed a market switch for EACH coin
+    # 跟踪每个币种是否发生了市场切换
     witnessed_market_switch = {coin: False for coin in COINS}
     
-    # Thread-safe lock for shared state access
+    # 共享状态访问的线程安全锁
     market_lock = threading.Lock()
     
-    # 🛡️ ASYNC SYSTEM #2: ThreadPoolExecutor for parallel exit checks
+    # 🛡️ 异步系统 #2：用于并行退出检查的线程池
     sys2_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sys2")
     
-    # 🔄 ASYNC REDEEM: ThreadPoolExecutor for sequential redeems
-    # max_workers=1 so redeems go one by one (not in parallel)
+    # 🔄 异步赎回：用于顺序赎回的线程池
+    # max_workers=1 确保赎回逐一执行（非并行）
     redeem_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="redeem")
     
     # ═══════════════════════════════════════════════════════════════
-    # TELEGRAM COMMAND HANDLER - Thread-safe chart generation on demand
+    # TELEGRAM 命令处理器 - 线程安全的按需图表生成
     # ═══════════════════════════════════════════════════════════════
     def handle_chart_command():
         """
-        Generate and send PnL chart on demand when user sends /chart or /pnl
-        THREAD-SAFE: Uses market_lock to safely read multi_trader data
-        FAULT-TOLERANT: Full error handling, never crashes main loop
+        按需生成并发送 PnL 图表（用户发送 /chart 或 /pnl 时触发）
+        线程安全：使用 market_lock 安全读取 multi_trader 数据
+        容错：完整错误处理，不会崩溃主循环
         """
         try:
             print("\n[TELEGRAM CMD] 📊 Generating PnL chart on demand...")
             
-            # Generate chart path (unique name to avoid conflicts)
+            # 生成图表路径（唯一名称避免冲突）
             import uuid
             chart_path = f"/root/4coins_live/logs/pnl_chart_on_demand_{uuid.uuid4().hex[:8]}.png"
             
@@ -506,12 +539,12 @@ def main(args=None):
             print(f"[TELEGRAM CMD] COINS list: {COINS}")
             print(f"[TELEGRAM CMD] Log dir: /root/4coins_live/logs")
             
-            # Import chart generator
+            # 导入图表生成器
             from pnl_chart_generator import generate_pnl_chart
             
-            # Generate chart (reads JSONL files - safe concurrent read)
-            # NOTE: We don't check total_completed_markets because it resets after restart
-            # Instead, generate_pnl_chart will check actual files and return False if no data
+            # 生成图表（读取 JSONL 文件 - 安全的并发读取）
+            # 注意：不检查 total_completed_markets，因为重启后该值会重置
+            # 改为由 generate_pnl_chart 检查实际文件，若无数据则返回 False
             print(f"[TELEGRAM CMD] Calling generate_pnl_chart()...")
             result = generate_pnl_chart('/root/4coins_live/logs', COINS, chart_path)
             print(f"[TELEGRAM CMD] generate_pnl_chart() returned: {result}")
@@ -521,18 +554,18 @@ def main(args=None):
                 notifier.send_message("⚠️ No completed markets yet. Chart will be available after first market closes.")
                 return
             
-            # THREAD-SAFE: Lock access to shared data for stats reading
+            # 线程安全：锁定共享数据以读取统计信息
             with market_lock:
                 
-                # Get current portfolio stats (safe read under lock)
+                # 获取当前投资组合统计（锁内安全读取）
                 try:
                     portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                 except Exception as e:
                     print(f"[TELEGRAM CMD] ⚠️ Stats error: {e}")
                     portfolio_stats = {'total_pnl': 0, 'uptime': '?'}
                 
-                # Count actual completed markets from files (not from memory variable)
-                # This works correctly after bot restart
+                # 从文件计数实际已完结市场（而非内存变量）
+                # 这样在机器人重启后也能正确工作
                 actual_markets_count = 0
                 for coin in COINS:
                     trades_file = Path(f"/root/4coins_live/logs/late_v3_{coin}/trades.jsonl")
@@ -543,11 +576,11 @@ def main(args=None):
                         except:
                             pass
                 
-                # Create caption
+                # 创建标题文字
                 total_pnl = portfolio_stats.get('total_pnl', 0)
                 uptime = portfolio_stats.get('uptime', '?')
                 
-                # Format PnL by coin
+                # 按币种格式化 PnL
                 coin_stats = []
                 for coin in COINS:
                     coin_pnl = portfolio_stats.get(f'{coin}_pnl', 0)
@@ -563,14 +596,14 @@ def main(args=None):
 <b>By Coin:</b>
 {' | '.join(coin_stats)}"""
             
-            # Send photo (outside lock - network I/O can be slow)
+            # 发送图片（在锁外 - 网络 I/O 可能较慢）
             if notifier.send_photo(chart_path, caption):
                 print(f"[TELEGRAM CMD] ✓ Chart sent successfully")
             else:
                 print(f"[TELEGRAM CMD] ✗ Failed to send chart to Telegram")
                 notifier.send_message("❌ Chart generated but failed to send. Please try again.")
             
-            # Cleanup temp file
+            # 清理临时文件
             try:
                 import os
                 os.remove(chart_path)
@@ -583,14 +616,14 @@ def main(args=None):
             try:
                 notifier.send_message(f"❌ Error generating chart:\n<code>{error_msg}</code>")
             except:
-                pass  # Don't crash if notification fails
+                pass  # 通知失败也不崩溃
     
     def get_pol_price_usd() -> float:
         """
-        Get current POL price in USD via CoinGecko API
+        通过 CoinGecko API 获取当前 POL 的美元价格
         
         Returns:
-            POL price in USD or 0.45 (fallback) if API unavailable
+            POL 美元价格，若 API 不可用则返回回退值 0.45
         """
         try:
             url = "https://api.coingecko.com/api/v3/simple/price"
@@ -607,7 +640,7 @@ def main(args=None):
                     print(f"[PRICE API] POL price: ${price:.4f}")
                     return float(price)
             
-            # Fallback if API didn't return price
+            # API 未返回价格时的回退
             print(f"[PRICE API] ⚠️ Failed to get POL price, using fallback: $0.45")
             return 0.45
             
@@ -617,14 +650,14 @@ def main(args=None):
     
     def get_active_positions():
         """
-        Get active positions via Polymarket Data API
-        THREAD-SAFE: Only readonly API requests, doesn't use shared state
+        通过 Polymarket Data API 获取活跃持仓
+        线程安全：仅只读 API 请求，不访问共享状态
         
         Returns:
-            List of positions or None on error
+            持仓列表，出错时返回 None
         """
         try:
-            # Get wallet address from order_executor
+            # 从 order_executor 获取钱包地址
             wallet = order_executor.wallet_address
             if not wallet:
                 print("[POSITIONS API] ⚠️ No wallet address")
@@ -633,7 +666,7 @@ def main(args=None):
             url = "https://data-api.polymarket.com/positions"
             params = {
                 'user': wallet,
-                'sizeThreshold': 0.1,  # Minimum 0.1 contracts
+                'sizeThreshold': 0.1,  # 最低 0.1 张合约
                 'limit': 50,
                 'sortBy': 'CURRENT',
                 'sortDirection': 'DESC'
@@ -656,13 +689,13 @@ def main(args=None):
     
     def handle_balance_command():
         """
-        Show wallet balance when user sends /balance
-        THREAD-SAFE: Safe concurrent access
+        用户发送 /balance 时显示钱包余额
+        线程安全：安全的并发访问
         """
         try:
             print("\n[TELEGRAM CMD] 💰 Getting wallet balance...")
             
-            # Get balances
+            # 获取余额
             usdc_balance = order_executor.get_wallet_usdc_balance()
             pol_balance = order_executor.get_pol_balance()
             
@@ -670,13 +703,13 @@ def main(args=None):
                 notifier.send_message("❌ Failed to get USDC balance")
                 return
             
-            # Get current POL price via CoinGecko API
+            # 通过 CoinGecko API 获取当前 POL 价格
             pol_price_usd = get_pol_price_usd()
             pol_value_usd = (pol_balance or 0) * pol_price_usd
             
             total_usd = usdc_balance + pol_value_usd
             
-            # Format message
+            # 格式化消息
             message = f"""<b>💰 WALLET BALANCE</b>
 ━━━━━━━━━━━━━━━
 
@@ -697,17 +730,17 @@ def main(args=None):
             try:
                 notifier.send_message(f"❌ Error getting balance:\n<code>{error_msg}</code>")
             except:
-                pass  # Don't crash if notification fails
+                pass  # 通知失败也不崩溃
     
     def handle_positions_command():
         """
-        Show active positions when user sends /t or /positions
-        THREAD-SAFE: Only readonly API calls, no shared state access
+        用户发送 /t 或 /positions 时显示活跃持仓
+        线程安全：仅只读 API 调用，不访问共享状态
         """
         try:
             print("\n[TELEGRAM CMD] 📊 Getting active positions...")
             
-            # Get positions via API (thread-safe - only API request)
+            # 通过 API 获取持仓（线程安全 - 仅 API 请求）
             positions = get_active_positions()
             
             if positions is None:
@@ -718,20 +751,20 @@ def main(args=None):
                 notifier.send_message("📊 <b>No active positions</b>\n\nAll markets closed or redeemed! 🎉")
                 return
             
-            # Calculate total metrics
+            # 计算总指标
             total_value = sum(p.get('currentValue', 0) for p in positions)
             total_pnl = sum(p.get('cashPnl', 0) for p in positions)
             redeemable_value = sum(p.get('currentValue', 0) for p in positions if p.get('redeemable'))
             redeemable_count = sum(1 for p in positions if p.get('redeemable'))
             
-            # Format message
+            # 格式化消息
             message = f"<b>📊 ACTIVE POSITIONS ({len(positions)})</b>\n"
             message += "━━━━━━━━━━━━━━━\n\n"
             
-            # Show up to 10 positions
+            # 最多显示 10 条持仓
             for i, p in enumerate(positions[:10]):
                 title = p.get('title', 'Unknown')
-                # Truncate long names
+                # 截断过长名称
                 if len(title) > 45:
                     title = title[:42] + "..."
                 
@@ -745,7 +778,7 @@ def main(args=None):
                 pnl_pct = p.get('percentPnl', 0)
                 redeemable = p.get('redeemable', False)
                 
-                # Emoji by status
+                # 按状态显示图标
                 if redeemable:
                     emoji = "💰"
                     status = " [REDEEM!]"
@@ -762,14 +795,14 @@ def main(args=None):
                 message += f"├ Value: ${initial:.2f} → ${current:.2f}\n"
                 message += f"└ PnL: ${pnl:+.2f} ({pnl_pct:+.1f}%) {emoji}{status}\n\n"
             
-            # If more than 10 positions
+            # 如果超过 10 条持仓
             if len(positions) > 10:
                 hidden_value = sum(p.get('currentValue', 0) for p in positions[10:])
                 hidden_pnl = sum(p.get('cashPnl', 0) for p in positions[10:])
                 message += f"<i>...and {len(positions) - 10} more positions"
                 message += f" (${hidden_value:.2f}, PnL: ${hidden_pnl:+.2f})</i>\n\n"
             
-            # Final statistics
+            # 最终统计
             message += "━━━━━━━━━━━━━━━\n"
             message += f"<b>Total Value:</b> ${total_value:.2f}\n"
             message += f"<b>Total PnL:</b> ${total_pnl:+.2f}"
@@ -792,19 +825,19 @@ def main(args=None):
             try:
                 notifier.send_message(f"❌ Error getting positions:\n<code>{error_msg}</code>")
             except:
-                pass  # Don't crash if notification fails
+                pass  # 通知失败也不崩溃
     
     def handle_redeem_command():
         """
-        Show redeemable positions with interactive buttons
-        THREAD-SAFE: Uses API calls and redeem_collector methods
+        显示可赎回持仓及交互按钮
+        线程安全：使用 API 调用和 redeem_collector 方法
         """
         global redeem_positions_cache
         
         try:
             print("\n[TELEGRAM CMD] 💰 Getting redeemable positions...")
             
-            # Use existing method from SimpleRedeemCollector
+            # 使用 SimpleRedeemCollector 的现有方法
             positions = redeem_collector._fetch_redeemable_positions()
             
             if positions is None:
@@ -815,18 +848,18 @@ def main(args=None):
                 notifier.send_message("✅ <b>No positions to redeem!</b>\n\nAll markets are already redeemed or still open.")
                 return
             
-            # Save to cache for callback handlers (thread-safe)
+            # 缓存到回调处理程序（线程安全）
             with redeem_cache_lock:
                 redeem_positions_cache = positions
             
-            # Calculate total value
+            # 计算总价值
             total_value = sum(p.get('currentValue', 0) for p in positions)
             
-            # Format message
+            # 格式化消息
             message = f"<b>💰 REDEEMABLE POSITIONS ({len(positions)})</b>\n"
             message += "━━━━━━━━━━━━━━━\n\n"
             
-            for i, p in enumerate(positions[:10]):  # Max 10 positions in list
+            for i, p in enumerate(positions[:10]):  # 最多列出 10 个仓位
                 title = p.get('title', 'Unknown')
                 if len(title) > 40:
                     title = title[:37] + "..."
@@ -846,7 +879,7 @@ def main(args=None):
             message += f"<b>Total Value:</b> ${total_value:.2f}\n\n"
             message += "<i>Choose action:</i>"
             
-            # Create buttons
+            # 创建按钮
             buttons = [
                 [
                     {"text": "💰 Redeem All", "callback_data": "redeem_all"},
@@ -854,13 +887,13 @@ def main(args=None):
                 ]
             ]
             
-            # Add button for each position (up to 10 items)
+            # 为每个仓位添加按钮（最多 10 项）
             for i in range(min(len(positions), 10)):
                 buttons.append([
                     {"text": f"💰 Redeem #{i+1}", "callback_data": f"redeem_pos_{i}"}
                 ])
             
-            # Send message with buttons
+            # 发送带按钮的消息
             notifier.send_message_with_buttons(message, buttons)
             print(f"[TELEGRAM CMD] ✅ Redeem menu sent: {len(positions)} positions, ${total_value:.2f}")
             
@@ -875,11 +908,11 @@ def main(args=None):
                 pass
     
     def handle_redeem_all_callback(callback_id: str, message_id: int):
-        """Handle 'Redeem All' button click"""
+        """处理"赎回全部"按钮点击"""
         global redeem_positions_cache
         
         try:
-            # Get positions from cache (thread-safe)
+            # 从缓存获取仓位（线程安全）
             with redeem_cache_lock:
                 positions = redeem_positions_cache.copy()
             
@@ -891,19 +924,19 @@ def main(args=None):
             
             total = len(positions)
             
-            # Update message
+            # 更新消息
             notifier.edit_message_text(
                 message_id, 
                 f"<b>🚀 REDEEMING {total} POSITIONS...</b>\n\n<i>Please wait, this may take a few minutes...</i>"
             )
             
-            # Redeem process with pauses
+            # 赎回流程（带间隔停顿）
             success_count = 0
             fail_count = 0
             total_redeemed = 0.0
             
             for i, pos in enumerate(positions):
-                # Use existing method from SimpleRedeemCollector
+                # 使用 SimpleRedeemCollector 的现有方法
                 result = redeem_collector._redeem_one(i + 1, total, pos)
                 
                 if result:
@@ -912,13 +945,13 @@ def main(args=None):
                 else:
                     fail_count += 1
                 
-                # Pause between redeems (as in automatic collector)
+                # 赎回之间的停顿（与自动收集器一致）
                 if i < total - 1:
                     pause = redeem_collector.pause_between
                     print(f"[REDEEM] Pause {pause}s before next redeem...")
                     time.sleep(pause)
             
-            # Final report
+            # 最终报告
             message = f"<b>✅ REDEEM COMPLETED!</b>\n"
             message += "━━━━━━━━━━━━━━━\n\n"
             message += f"<b>Total positions:</b> {total}\n"
@@ -940,11 +973,11 @@ def main(args=None):
                 pass
     
     def handle_redeem_position_callback(callback_id: str, message_id: int, index: int):
-        """Handle 'Redeem #N' button click"""
+        """处理"赎回 #N"按钮点击"""
         global redeem_positions_cache
         
         try:
-            # Get positions from cache (thread-safe)
+            # 从缓存获取持仓（线程安全）
             with redeem_cache_lock:
                 positions = redeem_positions_cache.copy()
             
@@ -957,13 +990,13 @@ def main(args=None):
             
             notifier.answer_callback_query(callback_id, f"🚀 Redeeming position #{index+1}...")
             
-            # Update message
+            # 更新消息
             notifier.edit_message_text(
                 message_id,
                 f"<b>🚀 REDEEMING POSITION #{index+1}...</b>\n\n{title}\n\n<i>Please wait...</i>"
             )
             
-            # Redeem one position
+            # 赎回单个持仓
             result = redeem_collector._redeem_one(1, 1, pos)
             
             if result:
@@ -990,7 +1023,7 @@ def main(args=None):
                 pass
     
     def handle_redeem_cancel_callback(callback_id: str, message_id: int):
-        """Handle 'Cancel' button click"""
+        """处理"取消"按钮点击"""
         try:
             notifier.answer_callback_query(callback_id, "Cancelled")
             notifier.edit_message_text(message_id, "❌ <b>Redeem cancelled</b>")
@@ -1000,15 +1033,15 @@ def main(args=None):
     
     def handle_shutdown_command():
         """
-        Emergency shutdown: find and stop main.py process
-        THREAD-SAFE: Uses OS signals, doesn't access shared state
+        紧急关闭：查找并停止 main.py 进程
+        线程安全：使用 OS 信号，不访问共享状态
         
-        ⚠️ CRITICAL: This will stop the trading bot!
+        ⚠️ 关键：这将停止交易机器人！
         """
         try:
             print("\n[TELEGRAM CMD] 🛑 EMERGENCY SHUTDOWN requested!")
             
-            # Find process main.py
+            # 查找 main.py 进程
             try:
                 result = subprocess.run(
                     ['pgrep', '-f', 'python3.*src/main.py'],
@@ -1024,7 +1057,7 @@ def main(args=None):
                         notifier.send_message("❌ <b>Process not found!</b>\n\nThe bot is not running.")
                         return
                     
-                    # Send confirmation with buttons
+                    # 发送带按钮的确认消息
                     message = f"⚠️ <b>EMERGENCY SHUTDOWN</b>\n\n"
                     message += f"<b>Process found:</b> PID {pid}\n"
                     message += f"<b>Command:</b> python3 src/main.py\n\n"
@@ -1061,24 +1094,24 @@ def main(args=None):
                 pass
     
     def handle_shutdown_confirm_callback(callback_id: str, message_id: int, pid: str):
-        """Handle 'STOP BOT' confirmation button click"""
+        """处理"停止机器人"确认按钮点击"""
         try:
             notifier.answer_callback_query(callback_id, "🛑 Stopping bot...", show_alert=True)
             
-            # Update message
+            # 更新消息
             notifier.edit_message_text(
                 message_id,
                 f"<b>🛑 STOPPING BOT...</b>\n\nPID: {pid}\n\n<i>Sending SIGINT signal...</i>"
             )
             
-            # Send SIGINT (like Ctrl+C)
+            # 发送 SIGINT 信号（如同 Ctrl+C）
             try:
                 os.kill(int(pid), signal.SIGINT)
                 
-                # Wait a bit
+                # 稍等片刻
                 time.sleep(2)
                 
-                # Check that process is stopped
+                # 检查进程是否已停止
                 result = subprocess.run(
                     ['ps', '-p', pid],
                     capture_output=True,
@@ -1087,13 +1120,13 @@ def main(args=None):
                 )
                 
                 if result.returncode == 0:
-                    # Process still running (graceful shutdown in progress)
+                    # 进程仍在运行（优雅关闭进行中）
                     message = f"<b>✅ SHUTDOWN SIGNAL SENT!</b>\n\n"
                     message += f"PID: {pid}\n\n"
                     message += f"<i>Bot is shutting down gracefully...</i>\n"
                     message += f"<i>Check logs for details.</i>"
                 else:
-                    # Process stopped
+                    # 进程已停止
                     message = f"<b>✅ BOT STOPPED!</b>\n\n"
                     message += f"PID: {pid}\n\n"
                     message += f"<i>All positions saved.</i>"
@@ -1102,7 +1135,7 @@ def main(args=None):
                 print(f"[TELEGRAM CMD] ✅ Shutdown signal sent to PID {pid}")
                 
             except ProcessLookupError:
-                # Process no longer exists
+                # 进程已不存在
                 notifier.edit_message_text(
                     message_id,
                     f"<b>ℹ️ BOT ALREADY STOPPED</b>\n\nPID {pid} no longer exists."
@@ -1124,7 +1157,7 @@ def main(args=None):
                 pass
     
     def handle_shutdown_cancel_callback(callback_id: str, message_id: int):
-        """Handle 'Cancel' button click"""
+        """处理"取消"按钮点击"""
         try:
             notifier.answer_callback_query(callback_id, "Cancelled")
             notifier.edit_message_text(message_id, "✅ <b>Shutdown cancelled</b>\n\nBot continues running.")
@@ -1132,20 +1165,20 @@ def main(args=None):
         except Exception as e:
             print(f"[TELEGRAM CMD] ✗ Cancel error: {e}")
     
-    # Create dict with redeem callback handlers
+    # 创建赎回回调处理程序字典
     redeem_callbacks = {
         'redeem_all': handle_redeem_all_callback,
         'redeem_position': handle_redeem_position_callback,
         'redeem_cancel': handle_redeem_cancel_callback
     }
     
-    # Create dict with shutdown callback handlers
+    # 创建关闭回调处理程序字典
     shutdown_callbacks = {
         'shutdown_confirm': handle_shutdown_confirm_callback,
         'shutdown_cancel': handle_shutdown_cancel_callback
     }
     
-    # Start Telegram command listener (daemon thread, won't block shutdown)
+    # 启动 Telegram 命令监听器（守护线程，不阻塞关闭）
     dashboard.add_event("Starting command listener...", 'telegram')
     try:
         notifier.start_command_listener(
@@ -1163,12 +1196,12 @@ def main(args=None):
         dashboard.add_event("Bot continues without commands", 'info')
     
     # ═══════════════════════════════════════════════════════════════
-    # 🔥 SIMPLE REDEEM COLLECTOR - Periodic API-based redeem system
-    # Replaces complex pending_markets logic
+    # 🔥 简单赎回收集器 - 基于 API 的定期赎回系统
+    # 替代复杂的 pending_markets 逻辑
     # ═══════════════════════════════════════════════════════════════
     from simple_redeem_collector import SimpleRedeemCollector
     
-    # Get wallet address from order_executor
+    # 从 order_executor 获取钱包地址
     wallet_address = order_executor.wallet_address
     
     if wallet_address:
@@ -1184,7 +1217,7 @@ def main(args=None):
             notifier=notifier  # 🔥 FIX: For Telegram notifications
         )
         
-        # Start in background thread (daemon - doesn't block shutdown)
+        # 在后台线程中启动（守护线程 - 不阻塞关闭）
         redeem_collector.start()
         print(f"[SYSTEM] ✅ Simple Redeem Collector started")
         dashboard.add_event("Redeem collector active", 'success')
@@ -1195,12 +1228,12 @@ def main(args=None):
         dashboard.add_event("Redeem collector disabled (no wallet)", 'warning')
     
     # ═══════════════════════════════════════════════════════════════
-    # LEGACY: Old async redeem processor (will be removed)
+    # 旧版：异步赎回处理器（即将移除）
     # ═══════════════════════════════════════════════════════════════
     def process_redeem_async(coin, prev_market, pending_info, config, markets_skipped, 
                             session_start_time):
-        """Process redeem asynchronously without blocking main loop"""
-        # 🔍 CRITICAL: Log function start (confirms that submit() worked!)
+        """异步处理赎回，不阻塞主循环"""
+        # 🔍 关键：记录函数启动（确认 submit() 已执行！）
         print(f"\n[REDEEM ASYNC] 🚀 Started for {coin.upper()} market {prev_market}")
         
         try:
@@ -1212,11 +1245,11 @@ def main(args=None):
             elapsed = (now - pending_info['first_attempt']) / 60
             print(f"[{coin.upper()} REDEEM] Attempt {pending_info['attempts']}/{max_attempts} for {prev_market} (after {elapsed:.1f} min)")
             
-            # Try to redeem
+            # 尝试赎回
             metadata = trader_module.get_market_metadata(prev_market)
             redeem_success = False
             
-            # 🔍 DETAILED metadata DIAGNOSTICS
+            # 🔍 详细的元数据诊断
             print(f"[REDEEM] Checking metadata for {prev_market}...")
             print(f"[REDEEM]   - Metadata exists: {metadata is not None}")
             if metadata:
@@ -1246,11 +1279,11 @@ def main(args=None):
                         print(f"[REDEEM] ✅ Redeemed ${amount:.2f} USDC!")
                         
                         # ═══════════════════════════════════════════════════════════
-                        # 🔥 CRITICAL: Reset investment tracking for this market!
-                        # Now we can trade new market without limits!
+                        # 🔥 关键：重置该市场的投资跟踪！
+                        # 现在可以无限制地交易新市场！
                         # ═══════════════════════════════════════════════════════════
                         try:
-                            # Get safety_guard from order_executor
+                            # 从 order_executor 获取 safety_guard
                             if hasattr(trader_module, 'order_executor') and trader_module.order_executor:
                                 trader_module.order_executor.safety.reset_market(prev_market)
                         except Exception as reset_err:
@@ -1273,7 +1306,7 @@ def main(args=None):
                 print(f"[REDEEM]    2. Metadata not saved to disk (check logs/market_metadata.json)")
                 print(f"[REDEEM]    3. Bug in set_token_ids() or save_market_metadata_to_disk()")
             
-            # If redeem successful, close positions
+            # 赎回成功后关闭持仓
             if redeem_success:
                 api_result = get_market_outcome(prev_market)
                 
@@ -1282,7 +1315,7 @@ def main(args=None):
                     price_start = pending_info['price_start']
                     price_final = pending_info['price_final']
                     
-                    # Close for all strategies
+                    # 为所有策略关闭该市场
                     for base_name in STRATEGY_BASES:
                         strategy_name = f"{base_name}_{coin}"
                         try:
@@ -1294,12 +1327,12 @@ def main(args=None):
                                 btc_final=price_final
                             )
                             if result:
-                                # Send Telegram notification
+                                # 发送 Telegram 通知
                                 session_stats = multi_trader.get_session_stats(strategy_name, markets_skipped[coin])
                                 portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                                 notifier.send_market_closed(coin, result, session_stats, portfolio_stats)
                                 
-                                # Chart generation (if needed)
+                                # 图表生成（按需）
                                 nonlocal total_completed_markets, last_chart_at
                                 total_completed_markets += 1
                                 
@@ -1321,18 +1354,18 @@ def main(args=None):
                                 print(f"[{strategy_name:30s}] Closed {prev_market}: {pnl_sign}${result['pnl']:,.2f}")
                             elif redeem_amount > 0:
                                 # ═══════════════════════════════════════════════════════════
-                                # 🔥 FIX: If close_market() returned None (position empty after restart)
-                                # but redeem was successful, create minimal trade record from orders
-                                # This ensures ALL natural closes appear in dashboard!
+                                # 🔥 修复：若 close_market() 返回 None（重启后持仓为空）
+                                # 但赎回成功，则从订单重建最小化交易记录
+                                # 确保所有自然关闭在仪表盘上显示！
                                 # ═══════════════════════════════════════════════════════════
                                 print(f"[{strategy_name}] Position was empty but redeem successful (${redeem_amount:.2f})")
                                 print(f"[{strategy_name}] Creating trade record from orders for dashboard...")
                                 
                                 try:
-                                    # Get trader
+                                    # 获取 trader
                                     trader = multi_trader.traders.get(strategy_name)
                                     if trader:
-                                        # Reconstruct minimal trade from orders.jsonl
+                                        # 从 orders.jsonl 重建最小化交易记录
                                         import json
                                         total_cost = 0
                                         total_contracts = 0
@@ -1353,7 +1386,7 @@ def main(args=None):
                                             print(f"[{strategy_name}] Warning: Could not read orders: {e}")
                                         
                                         if total_cost > 0:
-                                            # Create minimal trade record
+                                            # 创建最小化交易记录
                                             pnl = redeem_amount - total_cost
                                             roi_pct = (pnl / total_cost * 100) if total_cost > 0 else 0
                                             
@@ -1377,13 +1410,13 @@ def main(args=None):
                                                 'duration': 0,
                                                 'close_time': time.time(),
                                                 'close_timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                                                'reconstructed': True  # Flag to indicate this was reconstructed
+                                                'reconstructed': True  # 标记表示此记录为重建
                                             }
                                             
-                                            # Add to closed_trades for dashboard visibility
+                                            # 添加到 closed_trades 以在仪表盘显示
                                             trader.closed_trades.append(minimal_trade)
                                             
-                                            # Log to file
+                                            # 记录到文件
                                             try:
                                                 trader._log_trade(minimal_trade)
                                             except Exception as e:
@@ -1398,22 +1431,22 @@ def main(args=None):
                         except Exception as e:
                             print(f"[ERROR] {strategy_name} close failed: {e}")
                 
-                # Remove from pending - success!
+                # 从待处理中移除 - 成功！
                 del pending_markets[coin][prev_market]
                 print(f"[SUCCESS] Market {prev_market} completed and redeemed!")
                 print()
                 return True
             
-            # Redeem failed
+            # 赎回失败
             if pending_info['attempts'] < max_attempts:
                 pending_info['next_retry'] = now + retry_delay
                 print(f"[PENDING] Will retry in {retry_delay // 60} minutes")
                 return False
             else:
-                # Failed after max attempts
+                # 达到最大尝试次数后失败
                 print(f"[ERROR] ❌ Market {prev_market} failed after {max_attempts} attempts!")
                 
-                # Get position info
+                # 获取持仓信息
                 strategy_name = f"{STRATEGY_BASES[0]}_{coin}"
                 trader = multi_trader.get_trader(strategy_name)
                 position_info = ""
@@ -1423,7 +1456,7 @@ def main(args=None):
                         if pos[side]['total_shares'] > 0:
                             position_info += f" {side}:{pos[side]['total_shares']:.0f}@${pos[side]['total_invested']:.2f}"
                 
-                # Log failure
+                # 记录失败
                 failed_log = Path("logs/failed_redeems.log")
                 failed_log.parent.mkdir(exist_ok=True)
                 with open(failed_log, "a") as f:
@@ -1432,11 +1465,11 @@ def main(args=None):
                 
                 print(f"[ERROR] Logged to logs/failed_redeems.log")
                 
-                # Send alert
+                # 发送警报
                 alert_msg = f"⚠️ <b>FAILED REDEEM</b>\n\nMarket: <code>{prev_market}</code>\nPosition: {position_info}\nAttempts: {max_attempts}\n\nCheck logs/failed_redeems.log"
                 order_executor._send_telegram_alert(alert_msg)
                 
-                # Remove from pending
+                # 从待处理中移除
                 del pending_markets[coin][prev_market]
                 print()
                 return False
@@ -1452,17 +1485,17 @@ def main(args=None):
             return False
     
     # ═══════════════════════════════════════════════════════════════
-    # EVENT-DRIVEN CALLBACK - Called INSTANTLY on price changes
+    # 事件驱动回调 - 价格变化时立即触发
     # ═══════════════════════════════════════════════════════════════
     def on_price_update(coin: str, market_state: Dict):
         """
-        Called IMMEDIATELY when price changes from Polymarket WebSocket
-        Handles both EXIT checks and ENTRY signals in real-time
-        Thread-safe with comprehensive error handling
+        当 Polymarket WebSocket 价格变化时立即调用
+        实时处理退出检查和入场信号
+        线程安全，包含全面的错误处理
         """
         try:
             # ═══════════════════════════════════════════════════════
-            # VALIDATION: Check inputs
+            # 验证：检查输入
             # ═══════════════════════════════════════════════════════
             if not market_state or not coin:
                 return
@@ -1471,18 +1504,18 @@ def main(args=None):
             if not market_slug:
                 return
             
-            # Get prices with safe defaults
+            # 获取带安全默认值的价格
             up_ask = market_state.get('up_ask', 0.5)
             down_ask = market_state.get('down_ask', 0.5)
-            up_bid = market_state.get('up_bid', up_ask * 0.95)  # BID for selling (fallback: 95% of ASK)
-            down_bid = market_state.get('down_bid', down_ask * 0.95)  # BID for selling (fallback: 95% of ASK)
+            up_bid = market_state.get('up_bid', up_ask * 0.95)  # 卖出时的买一价（回退：ASK 的 95%）
+            down_bid = market_state.get('down_bid', down_ask * 0.95)  # 卖出时的买一价（回退：ASK 的 95%）
             
-            # Validate prices
+            # 验证价格
             if up_ask <= 0 or down_ask <= 0 or up_ask > 1 or down_ask > 1:
                 return
             
             # ═══════════════════════════════════════════════════════
-            # THREAD-SAFE: Check market status
+            # 线程安全：检查市场状态
             # ═══════════════════════════════════════════════════════
             with market_lock:
                 if coin not in market_start_prices:
@@ -1492,29 +1525,29 @@ def main(args=None):
                 
                 status = market_start_prices[coin].get(market_slug, -999)
                 if status in [-1, -2, -999]:
-                    return  # Market inactive, closed, or unknown
+                    return  # 市场未激活、已关闭或未知
             
             # ═══════════════════════════════════════════════════════
-            # PROCESS: All strategies for this coin
+            # 处理：该币种的所有策略
             # ═══════════════════════════════════════════════════════
             for base_name in STRATEGY_BASES:
                 strategy_name = f"{base_name}_{coin}"
                 
-                # Validate strategy exists
+                # 验证策略是否存在
                 if strategy_name not in strategies:
                     continue
                 
                 try:
-                    # Get current position stats (thread-safe via multi_trader locks)
+                    # 获取当前持仓统计（通过 multi_trader 锁实现线程安全）
                     position_stats = multi_trader.get_market_stats(strategy_name, market_slug, up_ask, down_ask)
                     
                     # ═══════════════════════════════════════════════════════
-                    # PART 1: EXIT CHECKS (if we have a position)
+                    # 第 1 部分：退出检查（如有持仓）
                     # ═══════════════════════════════════════════════════════
                     if position_stats and position_stats.get('total_invested', 0) > 0:
                         # ─────────────────────────────────────────────────
-                        # CRITICAL: Validate price freshness and synchronization
-                        # Prevents false stop-loss triggers from stale/desync prices
+                        # 关键：验证价格新鲜度和同步性
+                        # 防止因过期/不同步的价格触发虚假止损
                         # ─────────────────────────────────────────────────
                         up_ask_ts = market_state.get('up_ask_timestamp', 0)
                         down_ask_ts = market_state.get('down_ask_timestamp', 0)
@@ -1522,11 +1555,11 @@ def main(args=None):
                         is_valid, reason = validate_prices(up_ask, down_ask, up_ask_ts, down_ask_ts, coin)
                         
                         if not is_valid:
-                            # Prices invalid - skip ALL exit checks
+                            # 价格无效——跳过所有退出检查
                             print(f"[PRICE] ⚠️ {coin.upper()} prices invalid: {reason}, skipping exit checks")
                             continue
                         
-                        # Determine our side (by contract count)
+                        # 确定我方方向（按合约数量）
                         up_shares = position_stats.get('up_shares', 0)
                         down_shares = position_stats.get('down_shares', 0)
                         
@@ -1541,50 +1574,50 @@ def main(args=None):
                             our_price = down_ask
                         
                         if not our_side or not our_price:
-                            continue  # No clear position
+                            continue  # 无明确仓位
                         
-                        # Get unrealized PnL for stop-loss check
+                        # 获取未实现盈亏用于止损检查
                         unrealized_pnl = position_stats.get('unrealized_pnl', 0)
                         total_invested = position_stats.get('total_invested', 0)
                         
                         # ─────────────────────────────────────────────────
-                        # EXIT CHECK #1: HYBRID STOP-LOSS (per coin config)
-                        # BTC: None | ETH: -$10 | SOL: -15% | XRP: -$10
-                        # Backtest: +126% profit improvement (hybrid approach)
+                        # 退出检查 #1：混合止损（按币种配置）
+                        # BTC：无 | ETH：-$10 | SOL：-15% | XRP：-$10
+                        # 回测：混合方法提升 +126% 利润
                         # ─────────────────────────────────────────────────
-                        # Get stop-loss config for this coin
+                        # 获取该币种的止损配置
                         sl_config = config.get('exit', {}).get('stop_loss', {}).get('per_coin', {}).get(coin, {})
                         sl_enabled = sl_config.get('enabled', False)
                         sl_type = sl_config.get('type', 'none')
                         sl_value = sl_config.get('value', None)
                         
-                        # Calculate threshold based on type
+                        # 根据类型计算阈值
                         stop_loss_triggered = False
                         stop_loss_threshold = 0
                         
                         if sl_enabled and sl_value is not None:
                             if sl_type == 'fixed':
-                                # Fixed dollar amount
+                                # 固定美元金额
                                 stop_loss_threshold = sl_value
                                 stop_loss_triggered = unrealized_pnl <= stop_loss_threshold
                             elif sl_type == 'percent':
-                                # Percentage of invested capital
+                                # 投资本金的百分比
                                 stop_loss_threshold = total_invested * (sl_value / 100.0)
                                 stop_loss_triggered = unrealized_pnl <= stop_loss_threshold
                         
                         if stop_loss_triggered:
-                            # Double-check position still exists (race condition protection)
+                            # 双重检查仓位是否仍然存在（竞态条件保护）
                             trader = multi_trader.get_trader(strategy_name)
                             if not trader or market_slug not in trader.positions:
-                                continue  # Position already closed
+                                continue  # 仓位已关闭
                             
-                            # Thread-safe check: market not already closed
+                            # 线程安全检查：市场尚未关闭
                             with market_lock:
                                 current_status = market_start_prices[coin].get(market_slug, -999)
                                 if current_status == -2:
-                                    continue  # Already closed by another callback
+                                    continue  # 已被其他回调关闭
                             
-                            # 🔥 FIX 1: LOG EXIT TRIGGER (for all 4 coins)
+                            # 🔥 修复 1：记录退出触发器（适用于所有 4 个币种）
                             from trade_logger import log_exit_trigger
                             log_exit_trigger(
                                 market_slug=market_slug,
@@ -1594,46 +1627,46 @@ def main(args=None):
                                 threshold_pnl=stop_loss_threshold
                             )
                             
-                            # 🔥 FIX 2: Mark market as closed BEFORE exit to prevent race condition (thread-safe)
+                            # 🔥 修复 2：在退出前将市场标记为已关闭，防止竞态条件（线程安全）
                             with market_lock:
                                 market_start_prices[coin][market_slug] = -2
                             
-                            # 🔥 FIX 2.1: ATOMIC BLOCK (per-coin protection)
+                            # 🔥 修复 2.1：原子块（按币种保护）
                             order_executor.block_market(market_slug, coin)
                             
-                            # Close position with stop-loss (pass current BID prices for selling)
+                            # 以止损关闭仓位（传入当前 BID 价格用于卖出）
                             result = multi_trader.close_market_early_exit(
                                 strategy_name=strategy_name,
                                 market_slug=market_slug,
                                 exit_price=our_price,
                                 exit_reason='stop_loss',
-                                up_bid=up_bid,  # ✅ REAL BID for selling UP tokens
-                                down_bid=down_bid  # ✅ REAL BID for selling DOWN tokens
+                                up_bid=up_bid,  # ✅ 卖出 UP 代币的实际 BID
+                                down_bid=down_bid  # ✅ 卖出 DOWN 代币的实际 BID
                             )
                             
                             if result:
                                 
-                                # Send notifications
+                                # 发送通知
                                 if isinstance(result, dict):
                                     try:
                                         session_stats = multi_trader.get_session_stats(strategy_name, markets_skipped[coin])
                                         portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                                         notifier.send_market_closed(coin, result, session_stats, portfolio_stats)
                                         
-                                        # Increment completed markets counter
+                                        # 增加已完成市场计数器
                                         total_completed_markets += 1
                                         
-                                        # Generate and send PnL chart every CHART_INTERVAL markets
+                                        # 每 CHART_INTERVAL 个市场生成并发送 PnL 图表
                                         if total_completed_markets - last_chart_at >= CHART_INTERVAL:
                                             print(f"[CHART] {total_completed_markets} markets completed, generating PnL chart...")
                                             
                                             chart_path = f"/root/4coins_live/logs/pnl_chart_{total_completed_markets}.png"
                                             
-                                            # Import chart generator
+                                            # 导入图表生成器
                                             from pnl_chart_generator import generate_pnl_chart
                                             
                                             if generate_pnl_chart('/root/4coins_live/logs', COINS, chart_path):
-                                                # Send to Telegram
+                                                # 发送到 Telegram
                                                 caption = f"<b>📊 PnL Chart - {total_completed_markets} Markets Completed</b>"
                                                 if notifier.send_photo(chart_path, caption):
                                                     print(f"[CHART] ✓ Sent to Telegram successfully")
@@ -1645,7 +1678,7 @@ def main(args=None):
                                     except Exception as e:
                                         print(f"[ERROR] Notification failed: {e}")
                                 
-                                # Print confirmation
+                                # 打印确认信息
                                 print(f"\n{'='*80}")
                                 if sl_type == 'fixed':
                                     print(f"[{coin.upper()}] 🛑 STOP-LOSS (Fixed ${sl_value:.2f})")
@@ -1661,26 +1694,26 @@ def main(args=None):
                                     print(f"[EXIT] Final PnL: ${result['pnl']:+.2f}")
                                 print(f"[EXIT] Market is NO LONGER trading!")
                                 print(f"{'='*80}\n")
-                                return  # Exit callback after closing
+                                return  # 关闭后退出回调
                         
                         # ─────────────────────────────────────────────────
-                        # EXIT CHECK #2: FLIP-STOP (dynamic from strategy)
-                        # Triggers when our side price drops too low
+                        # 退出检查 #2：翻转止损（动态来自策略）
+                        # 当己方价格过低时触发
                         # ─────────────────────────────────────────────────
                         strategy = strategies.get(strategy_name)
                         if strategy and our_price <= strategy.flip_stop_price:
-                            # Double-check position still exists (race condition protection)
+                            # 双重检查仓位是否仍然存在（竞态条件保护）
                             trader = multi_trader.get_trader(strategy_name)
                             if not trader or market_slug not in trader.positions:
-                                continue  # Position already closed
+                                continue  # 仓位已关闭
                             
-                            # Thread-safe check: market not already closed
+                            # 线程安全检查：市场尚未关闭
                             with market_lock:
                                 current_status = market_start_prices[coin].get(market_slug, -999)
                                 if current_status == -2:
-                                    continue  # Already closed by another callback
+                                    continue  # 已被其他回调关闭
                             
-                            # 🔥 FIX 1: LOG EXIT TRIGGER (for all 4 coins)
+                            # 🔥 修复 1：记录退出触发器（适用于所有 4 个币种）
                             from trade_logger import log_exit_trigger
                             log_exit_trigger(
                                 market_slug=market_slug,
@@ -1690,46 +1723,46 @@ def main(args=None):
                                 threshold_price=strategy.flip_stop_price
                             )
                             
-                            # 🔥 FIX 2: Mark market as closed BEFORE exit to prevent race condition (thread-safe)
+                            # 🔥 修复 2：在退出前将市场标记为已关闭，防止竞态条件（线程安全）
                             with market_lock:
                                 market_start_prices[coin][market_slug] = -2
                             
-                            # 🔥 FIX 2.1: ATOMIC BLOCK (per-coin protection)
+                            # 🔥 修复 2.1：原子块（按币种保护）
                             order_executor.block_market(market_slug, coin)
                             
-                            # Close position (flip-stop with current BID prices for selling)
+                            # 关闭仓位（翻转止损，使用当前 BID 价格卖出）
                             result = multi_trader.close_market_early_exit(
                                 strategy_name=strategy_name,
                                 market_slug=market_slug,
                                 exit_price=our_price,
                                 exit_reason='flip_stop',
-                                up_bid=up_bid,  # ✅ REAL BID for selling UP tokens
-                                down_bid=down_bid  # ✅ REAL BID for selling DOWN tokens
+                                up_bid=up_bid,  # ✅ 卖出 UP 代币的实际 BID
+                                down_bid=down_bid  # ✅ 卖出 DOWN 代币的实际 BID
                             )
                             
                             if result:
                                 
-                                # Send notifications
+                                # 发送通知
                                 if isinstance(result, dict):
                                     try:
                                         session_stats = multi_trader.get_session_stats(strategy_name, markets_skipped[coin])
                                         portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                                         notifier.send_market_closed(coin, result, session_stats, portfolio_stats)
                                         
-                                        # Increment completed markets counter
+                                        # 增加已完成市场计数器
                                         total_completed_markets += 1
                                         
-                                        # Generate and send PnL chart every CHART_INTERVAL markets
+                                        # 每 CHART_INTERVAL 个市场生成并发送 PnL 图表
                                         if total_completed_markets - last_chart_at >= CHART_INTERVAL:
                                             print(f"[CHART] {total_completed_markets} markets completed, generating PnL chart...")
                                             
                                             chart_path = f"/root/4coins_live/logs/pnl_chart_{total_completed_markets}.png"
                                             
-                                            # Import chart generator
+                                            # 导入图表生成器
                                             from pnl_chart_generator import generate_pnl_chart
                                             
                                             if generate_pnl_chart('/root/4coins_live/logs', COINS, chart_path):
-                                                # Send to Telegram
+                                                # 发送到 Telegram
                                                 caption = f"<b>📊 PnL Chart - {total_completed_markets} Markets Completed</b>"
                                                 if notifier.send_photo(chart_path, caption):
                                                     print(f"[CHART] ✓ Sent to Telegram successfully")
@@ -1741,7 +1774,7 @@ def main(args=None):
                                     except Exception as e:
                                         print(f"[ERROR] Notification failed: {e}")
                                 
-                                # Print confirmation
+                                # 打印确认信息
                                 print(f"\n{'='*80}")
                                 print(f"[{coin.upper()}] 🛑 FLIP-STOP @ ${our_price:.2f}")
                                 print(f"[{strategy_name}] {market_slug}")
@@ -1751,61 +1784,61 @@ def main(args=None):
                                     print(f"[EXIT] PnL: ${result['pnl']:+.2f}")
                                 print(f"[EXIT] Market is NO LONGER trading!")
                                 print(f"{'='*80}\n")
-                                return  # Exit callback after closing
+                                return  # 关闭后退出回调
                     
                     # ═══════════════════════════════════════════════════════
-                    # PART 2: ENTRY SIGNAL CHECK (real-time)
+                    # 第二部分：入场信号检查（实时）
                     # ═══════════════════════════════════════════════════════
                     strategy = strategies.get(strategy_name)
                     if not strategy:
                         print(f"[ERROR] Strategy {strategy_name} not found in strategies dict!")
                         continue
                     
-                    # Generate signal with current market state
+                    # 根据当前市场状态生成信号
                     signal = strategy.should_enter(market_state, position_stats)
                     
                     if signal:
-                        # Extract side/contracts - handle LateEntryStrategy format
+                        # 提取方向/合约数——兼容 LateEntryStrategy 格式
                         side = None
                         contracts = None
                         
                         if 'favored' in signal:
-                            # LateEntryStrategy format
+                            # LateEntryStrategy 格式
                             favored = signal.get('favored', {})
                             side = favored.get('side')
                             contracts = favored.get('contracts')
                         else:
-                            # Fallback format
+                            # 回退格式
                             side = signal.get('side')
                             contracts = signal.get('contracts')
                         
-                        # Validate extracted values
+                        # 验证提取的值
                         if not side or contracts is None or contracts <= 0:
                             continue
                         
                         # ═══════════════════════════════════════════════════════
-                        # CRITICAL: Prevent race condition re-entry
-                        # Double-check market status before entry
-                        # Another thread may have closed market during signal processing
+                        # 关键：防止竞态条件下重复入场
+                        # 入场前双重检查市场状态
+                        # 信号处理期间其他线程可能已关闭市场
                         # ═══════════════════════════════════════════════════════
                         with market_lock:
                             current_status = market_start_prices[coin].get(market_slug, -999)
                             if current_status in [-1, -2]:
-                                # Market closed/skipped during signal processing
+                                # 信号处理期间市场已关闭或跳过
                                 print(f"[RACE] {coin.upper()} market {market_slug} status={current_status}, skipping entry")
                                 continue
                         
-                        # Check if trading is enabled for this coin
+                        # 检查该币种是否启用交易
                         trading_enabled = config.get('trading', {}).get(coin, {}).get('enabled', True)
                         if not trading_enabled:
-                            # Skip entry - trading disabled for this coin
+                            # 跳过入场——该币种交易已禁用
                             dashboard.add_event(f"Trading disabled for {coin.upper()}, skipping entry", 'system')
                             continue
                         
-                        # Calculate price
+                        # 计算价格
                         price = up_ask if side == 'UP' else down_ask
                         
-                        # Execute trade (using correct method name)
+                        # 执行交易
                         success = multi_trader.enter_position(
                             strategy_name=strategy_name,
                             market_slug=market_slug,
@@ -1818,14 +1851,14 @@ def main(args=None):
                         )
                         
                         if success and contracts > 0:
-                            # Update position stats after entry
+                            # 入场后更新仓位统计
                             updated_stats = multi_trader.get_market_stats(strategy_name, market_slug, up_ask, down_ask)
                             if updated_stats:
                                 total_entries = updated_stats.get('total_entries', 0)
                                 total_invested = updated_stats.get('total_invested', 0)
                                 unrealized_pnl = updated_stats.get('unrealized_pnl', 0)
                                 
-                                # Print entry confirmation
+                                # 打印入场确认信息
                                 print(f"[{strategy_name:30s}] {market_slug} | {side:5s} {contracts:3.0f} @ ${price:.2f} | "
                                       f"Total: {total_entries:3d} entries ${total_invested:7.2f} | PnL: ${unrealized_pnl:+7.2f}")
                 
@@ -1839,12 +1872,12 @@ def main(args=None):
                     traceback.print_exc()
         
         except Exception as e:
-            # Top-level error handler - should never reach here
+            # 顶级错误处理器——理论上不应到达此处
             print(f"[CRITICAL] Callback top-level error: {e}")
             import traceback
             traceback.print_exc()
     
-    # Register callback with data feed
+    # 向数据馈送注册回调
     data_feed.register_price_callback(on_price_update)
     print("[SYSTEM] ✓ Event-driven trading callbacks registered (INSTANT entry & exit)")
     print()
@@ -1855,7 +1888,7 @@ def main(args=None):
     print("         Will start trading after first market switch on each coin")
     print()
     
-    # Initialize keyboard listener for manual commands
+    # 初始化键盘监听器用于手动命令
     keyboard_listener = KeyboardListener()
     keyboard_listener.register_callback('m', run_manual_redeem, "Manual redeem all positions")
     keyboard_listener.start()
@@ -1864,7 +1897,7 @@ def main(args=None):
     
     loop_counter = 0
     
-    # Main loop
+    # 主循环
     while not stop_flag:
         try:
             if web_dashboard_state_mod.consume_stop_request():
@@ -1872,7 +1905,14 @@ def main(args=None):
                 break
             loop_counter += 1
             
-            # Process EACH coin independently
+            # 定期保存余额快照到数据库（约 30 秒间隔）
+            if loop_counter % 300 == 0:
+                try:
+                    db_manager.get_db().save_balance_snapshot(usdc_balance=wallet_balance, source='periodic_check')
+                except Exception:
+                    pass
+            
+            # 独立处理每个币种
             for coin in COINS:
                 market_state = data_feed.get_state(coin)
                 market_slug = market_state['market_slug']
@@ -1881,10 +1921,10 @@ def main(args=None):
                 if not market_slug:
                     continue
                 
-                # STEP 1: Check for market switch FIRST
+                # 第一步：先检查市场切换
                 for prev_market in list(market_start_prices[coin].keys()):
                     if prev_market != market_slug and prev_market != "":
-                        # Market switch detected!
+                        # 检测到市场切换！
                         if not witnessed_market_switch[coin]:
                             witnessed_market_switch[coin] = True
                             print(f"\n{'='*80}")
@@ -1898,14 +1938,14 @@ def main(args=None):
                         
                         price_start = market_start_prices[coin].get(prev_market, 0)
                         
-                        # Check if we had a position in this market
-                        strategy_name = f"{STRATEGY_BASES[0]}_{coin}"  # Use constant instead of hardcoded
+                        # 检查我们是否在该市场有仓位
+                        strategy_name = f"{STRATEGY_BASES[0]}_{coin}"  # 使用常量而非硬编码
                         trader = multi_trader.get_trader(strategy_name)
                         had_position = trader and prev_market in trader.positions
                         
                         if price_start > 0 or (price_start == 0 and had_position):
-                            # 🔥 DISABLED: Old pending_markets logic (replaced by SimpleRedeemCollector)
-                            # SimpleRedeemCollector will find and redeem this position automatically via API
+                            # 🔥 已禁用：旧的 pending_markets 逻辑（已由 SimpleRedeemCollector 替代）
+                            # SimpleRedeemCollector 将通过 API 自动查找并赎回该仓位
                             print(f"\n[{coin.upper()}] Market ended: {prev_market}")
                             print(f"[REDEEM] Will be collected by SimpleRedeemCollector API scanner")
                             # if prev_market not in pending_markets[coin]:
@@ -1920,23 +1960,23 @@ def main(args=None):
                             #         'next_retry': time.time() + first_delay
                             #     }
                         elif price_start == -1:
-                            # Market was skipped (started mid-market)
+                            # 市场已被跳过（中途启动）
                             markets_skipped[coin] += 1
                             session_stats = multi_trader.get_session_stats(strategy_name, markets_skipped[coin])
                             portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                             notifier.send_market_skipped(coin, prev_market, "Started mid-market", session_stats, portfolio_stats)
                             print(f"\n[{coin.upper()}] ⏭️  Skipped market {prev_market} ended (was started mid-market)")
                         elif price_start == 0 and not had_position:
-                            # Market was active but we didn't enter - skipped!
+                            # 市场活跃但未入场——跳过！
                             markets_skipped[coin] += 1
                             session_stats = multi_trader.get_session_stats(strategy_name, markets_skipped[coin])
                             portfolio_stats = _get_portfolio_stats(multi_trader, markets_skipped, session_start_time)
                             notifier.send_market_skipped(coin, prev_market, "No entry signals", session_stats, portfolio_stats)
                             print(f"\n[{coin.upper()}] ⏭️  Skipped market {prev_market} ended (no entry signals)")
                         elif price_start == -2:
-                            # 🔥 Market was closed early (stop-loss/flip-stop)
-                            # 🔥 DISABLED: Old pending_markets logic (replaced by SimpleRedeemCollector)
-                            # SimpleRedeemCollector will find and redeem this position automatically via API
+                            # 🔥 市场已被提前关闭（止损/翻转止损）
+                            # 🔥 已禁用：旧的 pending_markets 逻辑（已由 SimpleRedeemCollector 替代）
+                            # SimpleRedeemCollector 将通过 API 自动查找并赎回该仓位
                             print(f"\n[{coin.upper()}] Market {prev_market} ended (was closed early)")
                             print(f"[REDEEM] Will be collected by SimpleRedeemCollector API scanner")
                             # if prev_market not in pending_markets[coin]:
@@ -1951,51 +1991,51 @@ def main(args=None):
                             #         'next_retry': time.time() + first_delay
                             #     }
                         
-                        # Remove from tracking
+                        # 从跟踪中移除
                         del market_start_prices[coin][prev_market]
                 
-                # STEP 2: Track market start price
+                # 第二步：跟踪市场起始价格
                 if market_slug not in market_start_prices[coin]:
-                    # First time seeing this market
+                    # 首次见到该市场
                     if not witnessed_market_switch[coin]:
-                        # This is the FIRST market we see at startup - skip it
-                        market_start_prices[coin][market_slug] = -1  # -1 = skip
+                        # 这是启动时见到的第一个市场——跳过它
+                        market_start_prices[coin][market_slug] = -1  # -1 = 跳过
                         print(f"\n[{coin.upper()}] First market detected at startup: {market_slug}")
                         print(f"[SKIP] Not trading this market (script started mid-market)")
                         print(f"[SKIP] Will start trading after this market ends\n")
-                        # DON'T continue - let it check if in entry window below!
+                        # 不要继续——让它在下面的入场窗口检查中处理！
                     else:
-                        # We've witnessed a market switch, so this is a NEW valid market
+                        # 已见证过市场切换，这是一个新的有效市场
                         market_start_prices[coin][market_slug] = price if price > 0 else 0.0
                         print(f"\n[{coin.upper()}] ✓ New market witnessed from start: {market_slug}")
                         print(f"[TRADE] Start price: ${price:,.2f}" if price > 0 else "[TRADE] Start price: pending...")
                         print(f"[TRADE] Will trade this market ✓\n")
                         
                 elif market_start_prices[coin][market_slug] == 0:
-                    # Update pending market with valid price
+                    # 用有效价格更新待定市场
                     if price > 0:
                         market_start_prices[coin][market_slug] = price
                         print(f"\n[{coin.upper()}] ✓ Start price updated: {market_slug} | Price: ${price:,.2f}\n")
                         
                 elif market_start_prices[coin][market_slug] == -1:
-                    # This market is marked as skip - don't trade it
+                    # 该市场标记为跳过——不交易
                     pass
                 
-                # 🔥 DISABLED: Old pending_markets processing (replaced by SimpleRedeemCollector)
-                # SimpleRedeemCollector handles all redeems via periodic API scanning
+                # 🔥 已禁用：旧的 pending_markets 处理逻辑（已由 SimpleRedeemCollector 替代）
+                # SimpleRedeemCollector 通过定期 API 扫描处理所有赎回
                 # now = time.time()
                 # 
                 # for prev_market in list(pending_markets[coin].keys()):
                 #     pending_info = pending_markets[coin][prev_market]
                 #     
-                #     # Check if it's time to retry
+                #     # 检查是否到达重试时间
                 #     if now < pending_info['next_retry']:
                 #         continue
                 #     
-                #     # Increment attempts
+                #                 # 增加尝试次数
                 #     pending_info['attempts'] += 1
                 #     
-                #     # Submit to async executor (non-blocking!)
+                #     # 提交到异步执行器（非阻塞！）
                 #     try:
                 #         print(f"[REDEEM SUBMIT] 📤 Submitting {coin.upper()} market {prev_market} to async executor...")
                 #         future = redeem_executor.submit(
@@ -2004,7 +2044,7 @@ def main(args=None):
                 #             markets_skipped, session_start_time
                 #         )
                 #         print(f"[REDEEM SUBMIT] ✅ Task submitted successfully (Future: {future})")
-                #         # Update next retry immediately (don't wait for result)
+                #         # 立即更新下次重试时间（不等待结果）
                 #         redeem_cfg = config.get("execution", {}).get("redeem", {})
                 #         retry_delay = redeem_cfg.get("retry_delay_sec", 300)
                 #         pending_info['next_retry'] = now + retry_delay
@@ -2012,15 +2052,15 @@ def main(args=None):
                 #         print(f"[REDEEM] Failed to submit {coin}/{prev_market}: {e}")
                 
                 # ═══════════════════════════════════════════════════════
-                # BALANCE CHECK: 60 seconds before BTC market end
-                # (BTC market ends every 15 minutes - good timing for balance refresh)
+                # 余额检查：BTC 市场结束前 60 秒
+                # （BTC 市场每 15 分钟结束一次——适合定期刷新余额）
                 # ═══════════════════════════════════════════════════════
                 if coin == 'btc':
                     seconds_till_end = market_state.get('seconds_till_end', 0)
                     
-                    # Check balance 60 seconds before market end
+                    # 在市场结束前 60 秒检查余额
                     if 55 <= seconds_till_end <= 65:
-                        # Track which markets we've checked to avoid duplicates
+                        # 跟踪已检查的市场以避免重复
                         if not hasattr(main, '_balance_checked_markets'):
                             main._balance_checked_markets = set()
                         
@@ -2028,12 +2068,13 @@ def main(args=None):
                         if current_market and current_market not in main._balance_checked_markets:
                             main._balance_checked_markets.add(current_market)
                             
-                            # Cleanup old entries (keep only last 10)
+                            # 清理旧条目（仅保留最近 10 个）
                             if len(main._balance_checked_markets) > 10:
                                 main._balance_checked_markets = set(list(main._balance_checked_markets)[-10:])
                             
-                            # Async balance check (non-blocking)
+                            # 异步余额检查（非阻塞）
                             def check_balance_async():
+                                """异步查询钱包 USDC 余额并更新全局变量（非阻塞）。"""
                                 global wallet_balance
                                 try:
                                     if not safety_guard.dry_run:
@@ -2049,31 +2090,31 @@ def main(args=None):
                             
                             threading.Thread(target=check_balance_async, daemon=True, name="balance_check").start()
                 
-                # Check if this market is active
+                # 检查该市场是否活跃
                 current_market_status = market_start_prices[coin].get(market_slug, -999)
                 
-                # If market was skipped (-1) but now in entry window — allow trading
+                # 如果之前跳过（-1）但现在已进入入场窗口——允许交易
                 _strategy_name = f"{STRATEGY_BASES[0]}_{coin}"
                 _ew = strategies[_strategy_name].entry_window
                 if current_market_status == -1 and market_state['seconds_till_end'] <= _ew:
-                    market_start_prices[coin][market_slug] = 0  # Activate market
+                    market_start_prices[coin][market_slug] = 0  # 激活市场
                     print(f"\n[{coin.upper()}] ✅ Market {market_slug} NOW ACTIVE (entry window)")
                 elif current_market_status in [-1, -2, -999]:
-                    # Market is inactive (-1), closed by early exit (-2), or not tracked (-999)
+                    # 市场未激活（-1）、被提前关闭（-2）或未跟踪（-999）
                     continue
                 
                 # ========================================
-                # MARKET DISCOVERY & MONITORING
-                # Entry/Exit signals now handled by callback!
+                # 市场发现与监控
+                # 入场/出场信号现由回调处理！
                 # ========================================
-                # Dashboard update loop (no signal processing here)
-                pass  # Market monitoring handled by callback
+                # 仪表板更新循环（此处无信号处理）
+                pass  # 市场监控由回调处理
                 
             
-            # Update dashboard in REAL-TIME
-            # 🔥 CHANGED: pending_markets replaced by SimpleRedeemCollector
-            # Dashboard now shows empty pending (collector handles redeems automatically)
-            all_pending = {}  # Empty - collector handles redeems in background
+            # 实时更新仪表板
+            # 🔥 已变更：pending_markets 由 SimpleRedeemCollector 替代
+            # 仪表板现在显示空待处理列表（收集器自动处理赎回）
+            all_pending = {}  # 空字典——收集器在后台处理赎回
             dashboard.render(multi_trader, strategies, data_feed, wallet_balance, all_pending)
             
             try:
@@ -2097,12 +2138,12 @@ def main(args=None):
                 pass
             
             # ═══════════════════════════════════════════════════════════
-            # 🔥 SYSTEM #2: ASYNC INSTANT STOP-LOSS CHECK (every 0.1 sec)
-            # Checks all 4 coins IN PARALLEL
+            # 🔥 系统 #2：异步即时止损检查（每 0.1 秒）
+            # 并行检查全部 4 个币种
             # ═══════════════════════════════════════════════════════════
             for coin in COINS:
                 def check_coin_sys2(coin_name):
-                    """Async stop-loss/flip-stop check for one coin"""
+                    """单个币种的异步止损/翻转止损检查"""
                     try:
                         strategy_name = f"late_entry_v3_{coin_name}"
                         if strategy_name not in strategies:
@@ -2113,28 +2154,28 @@ def main(args=None):
                         if not market_slug:
                             return
                         
-                        # Check market status
+                        # 检查市场状态
                         with market_lock:
                             status = market_start_prices.get(coin_name, {}).get(market_slug, -999)
                             if status in [-1, -2, -999]:
                                 return
                         
-                        # Get prices
+                        # 获取价格
                         up_ask = market_state.get('up_ask', 0.5)
                         down_ask = market_state.get('down_ask', 0.5)
                         up_bid = market_state.get('up_bid', 0.5)
                         down_bid = market_state.get('down_bid', 0.5)
                         
-                        # Validate price freshness before exit checks
+                        # 在出场检查前验证价格新鲜度
                         up_ask_ts = market_state.get('up_ask_timestamp', 0)
                         down_ask_ts = market_state.get('down_ask_timestamp', 0)
                         
                         is_valid, reason = validate_prices(up_ask, down_ask, up_ask_ts, down_ask_ts, coin_name)
                         if not is_valid:
-                            # Skip stop-loss/flip-stop if prices invalid
+                            # 价格无效时跳过止损/翻转止损
                             return
                         
-                        # Get detailed stats
+                        # 获取详细统计
                         detailed_stats = multi_trader.traders[strategy_name].get_market_detailed_stats(
                             market_slug=market_slug,
                             up_ask=up_ask,
@@ -2144,7 +2185,7 @@ def main(args=None):
                         if not detailed_stats:
                             return
                         
-                        # Check stop-loss
+                        # 检查止损
                         if detailed_stats.get('stop_loss_triggered', False):
                             with market_lock:
                                 if market_start_prices[coin_name].get(market_slug, -999) == -2:
@@ -2155,7 +2196,7 @@ def main(args=None):
                             our_side = 'UP' if up_shares > down_shares else 'DOWN'
                             our_price = up_ask if our_side == 'UP' else down_ask
                             
-                            # 🔥 FIX 1: LOG EXIT TRIGGER (for all 4 coins)
+                            # 🔥 修复 1：记录退出触发器（适用于所有 4 个币种）
                             from trade_logger import log_exit_trigger
                             log_exit_trigger(
                                 market_slug=market_slug,
@@ -2165,11 +2206,11 @@ def main(args=None):
                                 threshold_pnl=detailed_stats.get('stop_loss_threshold', 0)
                             )
                             
-                            # 🔥 FIX 2: Mark market as closed BEFORE exit to prevent race condition
+                            # 🔥 修复 2：在退出前将市场标记为已关闭，防止竞态条件
                             with market_lock:
                                 market_start_prices[coin_name][market_slug] = -2
                             
-                            # 🔥 FIX 2.1: ATOMIC BLOCK (per-coin protection)
+                            # 🔥 修复 2.1：原子块（按币种保护）
                             order_executor.block_market(market_slug, coin_name)
                             
                             result = multi_trader.close_market_early_exit(
@@ -2184,7 +2225,7 @@ def main(args=None):
                             if result:
                                 print(f"[SYS#2] 🚨 {coin_name.upper()} STOP-LOSS: PnL=${detailed_stats['unrealized_pnl']:.2f}")
                         
-                        # Check flip-stop
+                        # 检查翻转止损
                         if detailed_stats.get('flip_stop_triggered', False):
                             with market_lock:
                                 if market_start_prices[coin_name].get(market_slug, -999) == -2:
@@ -2195,7 +2236,7 @@ def main(args=None):
                             our_side = 'UP' if up_shares > down_shares else 'DOWN'
                             our_price = up_ask if our_side == 'UP' else down_ask
                             
-                            # 🔥 FIX 1: LOG EXIT TRIGGER (for all 4 coins)
+                            # 🔥 修复 1：记录退出触发器（适用于所有 4 个币种）
                             from trade_logger import log_exit_trigger
                             log_exit_trigger(
                                 market_slug=market_slug,
@@ -2205,11 +2246,11 @@ def main(args=None):
                                 threshold_price=detailed_stats.get('flip_stop_price', 0)
                             )
                             
-                            # 🔥 FIX 2: Mark market as closed BEFORE exit to prevent race condition
+                            # 🔥 修复 2：在退出前将市场标记为已关闭，防止竞态条件
                             with market_lock:
                                 market_start_prices[coin_name][market_slug] = -2
                             
-                            # 🔥 FIX 2.1: ATOMIC BLOCK (per-coin protection)
+                            # 🔥 修复 2.1：原子块（按币种保护）
                             order_executor.block_market(market_slug, coin_name)
                             
                             result = multi_trader.close_market_early_exit(
@@ -2225,15 +2266,15 @@ def main(args=None):
                                 print(f"[SYS#2] 🚨 {coin_name.upper()} FLIP-STOP")
                     
                     except Exception as e:
-                        pass  # Silent - don't spam logs
+                        pass  # 静默处理——不刷日志
                 
-                # 🔥 Run via executor (in parallel for all coins)
+                # 🔥 通过执行器运行（并行处理所有币种）
                 try:
                     sys2_executor.submit(check_coin_sys2, coin)
                 except:
                     pass
             
-            # Sleep - can be slower now (entry/exit in callback)
+            # 休眠——现在可以慢一些了（入场/退出在回调中处理）
             time.sleep(0.1)
             
         except Exception as e:
@@ -2242,7 +2283,7 @@ def main(args=None):
             traceback.print_exc()
             time.sleep(1)
     
-    # Cleanup
+    # 清理资源
     print("\n[SYSTEM] Stopping keyboard listener...")
     if keyboard_listener:
         keyboard_listener.stop()
@@ -2250,14 +2291,14 @@ def main(args=None):
     print("[SYSTEM] Stopping data feed...")
     data_feed.stop()
     
-    # Final summary
+    # 最终摘要
     print("\n" + "=" * 115)
     print("  MERIDIAN — SESSION RESULTS".center(115))
     print("=" * 115)
     
     portfolio_stats = multi_trader.get_portfolio_stats()
     
-    # Display by strategy (grouped by base, showing BTC and ETH)
+    # 按策略显示（按基础分组，显示 BTC 和 ETH）
     for base_name in STRATEGY_BASES:
         print(f"\n=== {base_name.upper()} (BTC + ETH) ===")
         
@@ -2282,12 +2323,12 @@ def main(args=None):
             print(f"  {coin.upper():3s}: ${trader.current_capital:>8,.0f}  |  PnL: {pnl_sign}${pnl:>7,.0f}  |  "
                   f"Trades: {stats['total_trades']:3d}  |  WR: {stats['win_rate']:.1f}%")
         
-        # Strategy total
+        # 策略合计
         pnl_sign = "+" if total_pnl_strategy >= 0 else ""
         print(f"  {'TOTAL':3s}: ${total_capital_strategy:>8,.0f}  |  PnL: {pnl_sign}${total_pnl_strategy:>7,.0f}  |  "
               f"Trades: {total_trades_strategy:3d}")
     
-    # Portfolio total
+    # 投资组合总计
     print("\n" + "=" * 115)
     total_pnl = portfolio_stats['total_pnl']
     pnl_sign = "+" if total_pnl >= 0 else ""

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meridian — 登录</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <style>
+    .login-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+    .login-card h1 { margin-bottom: 0.25rem; }
+    .login-card .subtitle { margin-bottom: 1.5rem; color: var(--muted); font-size: 0.9rem; }
+    .login-card input[type="password"] {
+      width: 100%;
+      padding: 0.7rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 1rem;
+      box-sizing: border-box;
+      margin-bottom: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-card input[type="password"]:focus { border-color: var(--accent); }
+    .login-card .btn { width: 100%; padding: 0.7rem; font-size: 1rem; }
+    .login-card .error { color: var(--danger); margin-top: 0.75rem; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <h1>Meridian</h1>
+      <p class="subtitle">请输入密码以访问仪表盘</p>
+      <input type="password" id="password-input" placeholder="密码" autofocus />
+      <button type="button" class="btn btn-primary" id="btn-login">进入</button>
+      <p class="error" id="login-error" style="display:none;"></p>
+    </div>
+  </div>
+  <script>
+    const input = document.getElementById("password-input");
+    const btn = document.getElementById("btn-login");
+    const err = document.getElementById("login-error");
+
+    function doLogin() {
+      const pwd = input.value.trim();
+      if (!pwd) return;
+      btn.disabled = true;
+      btn.textContent = "验证中…";
+      err.style.display = "none";
+
+      fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.ok) {
+            window.location.href = "/";
+          } else {
+            err.textContent = data.message || "密码错误";
+            err.style.display = "block";
+            btn.disabled = false;
+            btn.textContent = "进入";
+          }
+        })
+        .catch(() => {
+          err.textContent = "请求失败，请重试";
+          err.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "进入";
+        });
+    }
+
+    btn.addEventListener("click", doLogin);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+  </script>
+</body>
+</html>

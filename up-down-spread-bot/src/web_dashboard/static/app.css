@@ -1,13 +1,13 @@
 :root {
-  --bg: #0f1419;
-  --surface: #1a2332;
-  --border: #2d3a4d;
-  --text: #e7ecf3;
-  --muted: #8b9cb3;
-  --accent: #3d8bfd;
-  --green: #3ecf8e;
-  --red: #f56565;
-  --warn: #ecc94b;
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --border: #dde0e4;
+  --text: #1a1d23;
+  --muted: #6e7681;
+  --accent: #2d7bf6;
+  --green: #0f9d58;
+  --red: #d93025;
+  --warn: #e8870e;
   --radius: 10px;
   font-family: "Segoe UI", system-ui, sans-serif;
 }
@@ -40,6 +40,7 @@ body {
   margin: 0 0 0.25rem;
   font-size: 1.75rem;
   font-weight: 600;
+  color: var(--text);
 }
 
 .subtitle {
@@ -64,17 +65,17 @@ body {
 }
 
 .badge-ok {
-  background: rgba(62, 207, 142, 0.2);
+  background: #e6f4ea;
   color: var(--green);
 }
 
 .badge-warn {
-  background: rgba(236, 201, 75, 0.2);
+  background: #fef3e0;
   color: var(--warn);
 }
 
 .badge-off {
-  background: rgba(139, 156, 179, 0.2);
+  background: #f0f0f0;
   color: var(--muted);
 }
 
@@ -99,13 +100,13 @@ body {
 }
 
 .btn-danger {
-  background: rgba(245, 101, 101, 0.25);
+  background: #fce8e6;
   color: var(--red);
-  border: 1px solid rgba(245, 101, 101, 0.4);
+  border: 1px solid rgba(217, 48, 37, 0.25);
 }
 
 .btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(0.95);
 }
 
 .panel {

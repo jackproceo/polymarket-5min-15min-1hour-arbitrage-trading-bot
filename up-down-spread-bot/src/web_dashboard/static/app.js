@@ -81,7 +81,7 @@
 
   function renderCoins(data) {
     const coins = data.coins || {};
-    const names = ["btc", "eth", "sol", "xrp"];
+    const names = ["btc", "eth", "sol"];
     coinsEl.innerHTML = names
       .map((c) => {
         const x = coins[c];

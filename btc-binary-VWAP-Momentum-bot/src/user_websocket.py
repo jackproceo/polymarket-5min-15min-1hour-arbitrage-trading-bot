@@ -63,67 +63,84 @@ class UserWebSocket:
         self._on_order: Optional[Callable] = None
     
     async def connect(self):
-        """Connect to User Channel WebSocket."""
-        try:
-            self._running = True
-            
-            logger.info(f"Connecting to User WebSocket at {WS_URL}...")
-            print(f"  Connecting to {WS_URL}...")
-            
-            # Connect without extra_headers (auth via message)
-            async with websockets.connect(
-                WS_URL,
-                ping_interval=30,
-                ping_timeout=10
-            ) as ws:
-                self._ws = ws
-                self._connected = True
-                logger.info("User WebSocket connected")
-                print("  WebSocket connection established")
-                
-                # Subscribe to user channel with auth object
-                subscribe_msg = {
-                    "type": "user",
-                    "auth": {
-                        "apiKey": self.api_key,
-                        "secret": self.api_secret,
-                        "passphrase": self.api_passphrase
+        """
+        连接到 User Channel WebSocket。
+        断开后自动重连（指数退避，最多重试 10 次）。
+        """
+        self._running = True
+        reconnect_delay = 2  # 初始重连延迟（秒）
+
+        while self._running:
+            try:
+                logger.info(f"Connecting to User WebSocket at {WS_URL}...")
+                print(f"  Connecting to {WS_URL}...")
+
+                async with websockets.connect(
+                    WS_URL,
+                    ping_interval=30,
+                    ping_timeout=10,
+                ) as ws:
+                    self._ws = ws
+                    self._connected = True
+                    # 重置退避延迟
+                    reconnect_delay = 2
+                    logger.info("User WebSocket connected")
+                    print("  WebSocket connection established")
+
+                    # Subscribe to user channel with auth object
+                    subscribe_msg = {
+                        "type": "user",
+                        "auth": {
+                            "apiKey": self.api_key,
+                            "secret": self.api_secret,
+                            "passphrase": self.api_passphrase,
+                        },
                     }
-                }
-                await ws.send(json.dumps(subscribe_msg))
-                logger.info("Sent subscription message")
-                print("  Sent subscription message")
-                
-                # Wait for response
-                try:
-                    first_msg = await asyncio.wait_for(ws.recv(), timeout=5)
-                    logger.info(f"First message: {first_msg[:200]}")
-                    print(f"  First response: {first_msg[:100]}...")
-                    await self._process_message(first_msg)
-                except asyncio.TimeoutError:
-                    logger.warning("No initial response from WebSocket")
-                    print("  No initial response (timeout)")
-                
-                # Listen for messages
-                while self._running:
+                    await ws.send(json.dumps(subscribe_msg))
+                    logger.info("Sent subscription message")
+                    print("  Sent subscription message")
+
+                    # Wait for response
                     try:
-                        msg = await asyncio.wait_for(ws.recv(), timeout=60)
-                        logger.debug(f"WS message: {msg[:100]}")
-                        await self._process_message(msg)
+                        first_msg = await asyncio.wait_for(ws.recv(), timeout=5)
+                        logger.info(f"First message: {first_msg[:200]}")
+                        print(f"  First response: {first_msg[:100]}...")
+                        await self._process_message(first_msg)
                     except asyncio.TimeoutError:
-                        # Send ping to keep alive
-                        await ws.ping()
-                    except websockets.ConnectionClosed as e:
-                        logger.warning(f"User WebSocket connection closed: {e}")
-                        print(f"  WebSocket closed: {e}")
-                        break
-                        
-        except Exception as e:
-            logger.error(f"User WebSocket error: {e}")
-            print(f"  WebSocket error: {e}")
-        finally:
-            self._connected = False
-            self._ws = None
+                        logger.warning("No initial response from WebSocket")
+                        print("  No initial response (timeout)")
+
+                    # Listen for messages
+                    while self._running:
+                        try:
+                            msg = await asyncio.wait_for(ws.recv(), timeout=60)
+                            logger.debug(f"WS message: {msg[:100]}")
+                            await self._process_message(msg)
+                        except asyncio.TimeoutError:
+                            await ws.ping()
+                        except websockets.ConnectionClosed as e:
+                            logger.warning(
+                                f"User WebSocket connection closed: {e}"
+                            )
+                            print(f"  WebSocket closed: {e}")
+                            break
+
+            except Exception as e:
+                logger.error(f"User WebSocket error: {e}")
+                print(f"  WebSocket error: {e}")
+            finally:
+                self._connected = False
+                self._ws = None
+
+            # 自动重连
+            if self._running:
+                logger.info(
+                    f"User WebSocket reconnecting in {reconnect_delay}s..."
+                )
+                print(f"  Reconnecting in {reconnect_delay}s...")
+                await asyncio.sleep(reconnect_delay)
+                # 指数退避，最大 60 秒
+                reconnect_delay = min(reconnect_delay * 2, 60)
     
     async def _process_message(self, msg: str):
         """Process incoming WebSocket message."""

@@ -4,6 +4,8 @@
 # Logs and runtime data
 logs/
 logs_v1/
+data/
+*.db
 
 # Python
 __pycache__/
@@ -38,3 +40,5 @@ backtest_data/
 *.png
 config.json
 *.md
+jack*.txt
+jack*.log

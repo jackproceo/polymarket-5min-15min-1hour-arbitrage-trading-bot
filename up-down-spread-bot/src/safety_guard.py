@@ -1,5 +1,5 @@
 """
-Safety Guard - Protection layer for real money trading
+安全卫士——真实资金交易的保护层
 """
 import time
 import json
@@ -8,17 +8,17 @@ from typing import Dict, Tuple
 
 
 class SafetyGuard:
-    """Protection against accidental real money trading"""
+    """防止意外真实资金交易"""
     
     def __init__(self, config: Dict):
         self.config = config
         
-        # Read from config (NO FALLBACKS - must be explicit!)
+        # 从配置读取（无回退值——必须明确指定！）
         safety_config = config.get("safety")
         if not safety_config:
             raise ValueError("❌ CRITICAL: 'safety' section missing in config.json!")
         
-        # Check required parameters
+        # 检查必需参数
         if "dry_run" not in safety_config:
             raise ValueError("❌ CRITICAL: 'dry_run' not set in config.json!")
         if "max_order_size_usd" not in safety_config:
@@ -28,22 +28,22 @@ class SafetyGuard:
         
         self.dry_run = safety_config["dry_run"]
         self.max_order_size_usd = safety_config["max_order_size_usd"]
-        self.max_orders_per_minute = safety_config.get("max_orders_per_minute", 100)  # OK fallback
+        self.max_orders_per_minute = safety_config.get("max_orders_per_minute", 100)  # 可接受的回退值
         self.max_total_investment = safety_config["max_total_investment"]
         
-        # Tracking
+        # 跟踪记录
         self.orders_history = []
-        self.invested_per_market = {}  # {market_slug: invested_usd} - PER MARKET!
+        self.invested_per_market = {}  # {market_slug: invested_usd} - 按市场！
         self.emergency_stop = False
         
-        # Logging
+        # 日志
         self.safety_log = Path("logs/safety.log")
         self.safety_log.parent.mkdir(exist_ok=True)
         
         self._log_init()
     
     def _log_init(self):
-        """Log initialization"""
+        """记录初始化信息"""
         mode = "🟢 DRY_RUN (SAFE)" if self.dry_run else "🔴 LIVE TRADING (REAL MONEY)"
         msg = f"\n{'='*80}\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] SafetyGuard Initialized\n"
         msg += f"Mode: {mode}\n"
@@ -60,31 +60,31 @@ class SafetyGuard:
     def check_order_allowed(self, side: str, contracts: int, price: float, 
                            market_slug: str) -> Tuple[bool, str]:
         """
-        Check if order is allowed
+        检查订单是否允许
         
-        Returns:
+        返回：
             (allowed: bool, reason: str)
         """
-        # Emergency stop
+        # 紧急停止
         if self.emergency_stop:
             return False, "EMERGENCY_STOP_ACTIVE"
         
-        # DRY_RUN - block all real orders
+        # 模拟模式——阻止所有真实订单
         if self.dry_run:
             return False, "DRY_RUN_MODE"
         
-        # Order size
+        # 订单大小
         order_size_usd = contracts * price
         if order_size_usd > self.max_order_size_usd:
             return False, f"ORDER_TOO_LARGE (${order_size_usd:.2f} > ${self.max_order_size_usd})"
         
-        # Rate limiting
+        # 速率限制
         recent_orders = [o for o in self.orders_history 
                         if time.time() - o['timestamp'] < 60]
         if len(recent_orders) >= self.max_orders_per_minute:
             return False, f"RATE_LIMIT ({len(recent_orders)}/{self.max_orders_per_minute} per min)"
         
-        # Total investment PER THIS MARKET (resets on market change!)
+        # 该市场的总投资额（市场切换时重置！）
         current_market_invested = self.invested_per_market.get(market_slug, 0.0)
         
         if current_market_invested + order_size_usd > self.max_total_investment:
@@ -94,7 +94,7 @@ class SafetyGuard:
     
     def record_order(self, side: str, contracts: float, price: float, 
                     market_slug: str, order_id: str = None):
-        """Record executed order"""
+        """记录已执行的订单"""
         order_size_usd = contracts * price
         
         order = {
@@ -110,42 +110,42 @@ class SafetyGuard:
         
         self.orders_history.append(order)
         
-        # Accumulate for THIS MARKET (not globally!)
+        # 累计到该市场（不全局累加！）
         if market_slug not in self.invested_per_market:
             self.invested_per_market[market_slug] = 0.0
         
         self.invested_per_market[market_slug] += order_size_usd
         
-        # Write to log
+        # 写入日志
         with open(self.safety_log, 'a', encoding='utf-8') as f:
             f.write(json.dumps(order) + '\n')
     
     def reset_market(self, market_slug: str):
         """
-        Reset investment tracking for closed market
+        重置已关闭市场的投资跟踪
         
-        Called after redeem or market close.
-        This allows trading new markets without limits from previous ones!
+        在赎回或市场关闭后调用。
+        这样可以在新市场交易而不受之前市场的限制！
         """
         if market_slug in self.invested_per_market:
             invested_amount = self.invested_per_market[market_slug]
             del self.invested_per_market[market_slug]
             print(f"[SAFETY] ♻️ Investment tracking reset for {market_slug} (was ${invested_amount:.2f})")
             
-            # Write to log
+            # 写入日志
             with open(self.safety_log, 'a', encoding='utf-8') as f:
                 f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] RESET_MARKET: {market_slug} (${invested_amount:.2f})\n")
     
     def get_market_investment(self, market_slug: str) -> float:
-        """Get current investment in market"""
+        """获取当前市场投资额"""
         return self.invested_per_market.get(market_slug, 0.0)
     
     def get_total_investment_all_markets(self) -> float:
-        """Get total investment across all active markets (for info)"""
+        """获取所有活跃市场的总投资额（仅供参考）"""
         return sum(self.invested_per_market.values())
     
     def activate_emergency_stop(self, reason: str):
-        """Activate emergency stop"""
+        """激活紧急停止"""
         self.emergency_stop = True
         msg = f"\n🚨 EMERGENCY STOP ACTIVATED: {reason}\n"
         print(msg)

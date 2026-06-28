@@ -1,5 +1,5 @@
 """
-Non-blocking keyboard listener for dashboard controls (cross-platform)
+仪表盘无阻塞键盘监听器（跨平台）
 """
 import sys
 import os
@@ -17,7 +17,7 @@ else:
 
 
 class KeyboardListener:
-    """Non-blocking keyboard listener (Windows & Unix)"""
+    """无阻塞键盘监听器（Windows 和 Unix）"""
     
     def __init__(self):
         self.running = False
@@ -27,12 +27,12 @@ class KeyboardListener:
         self.last_key_time = 0
         
     def register_callback(self, key: str, callback, description: str = ""):
-        """Register a callback for a specific key
+        """注册指定按键的回调
         
-        Args:
-            key: Single character key (e.g., 'm', 'M', 'q')
-            callback: Function to call when key is pressed
-            description: Optional description for help display
+        参数：
+            key: 单字符按键（例如 'm'、'M'、'q'）
+            callback: 按键时调用的函数
+            description: 供帮助显示的说明（可选）
         """
         key = key.lower()
         self.key_callbacks[key] = {
@@ -41,32 +41,34 @@ class KeyboardListener:
         }
     
     def _get_key_windows(self):
-        """Get a single keypress (non-blocking on Windows)"""
+        """获取单个按键（Windows 下无阻塞）"""
         if msvcrt.kbhit():
             ch = msvcrt.getwch()
             return ch.lower()
         return None
 
     def _get_key_unix(self):
-        """Get a single keypress (non-blocking on Unix)"""
+        """获取单个按键（Unix 下无阻塞）"""
         if select.select([sys.stdin], [], [], 0)[0]:
             return sys.stdin.read(1).lower()
         return None
     
     def _listener_loop(self):
-        """Main listener loop (runs in thread)"""
+        """主监听循环（在线程中运行）"""
         if IS_WINDOWS:
             self._listener_loop_windows()
         else:
             self._listener_loop_unix()
 
     def _listener_loop_windows(self):
+        """Windows 平台的主监听循环（轮询 msvcrt.kbhit）。"""
         while self.running:
             key = self._get_key_windows()
             self._handle_key(key)
             time.sleep(0.05)
 
     def _listener_loop_unix(self):
+        """Unix 平台的主监听循环（设置 cbreak 模式后轮询）。"""
         old_settings = termios.tcgetattr(sys.stdin)
         try:
             tty.setcbreak(sys.stdin.fileno())
@@ -78,6 +80,7 @@ class KeyboardListener:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
     def _handle_key(self, key):
+        """处理按下的键：查找注册的回调并执行（带 500ms 防抖）。"""
         if key and key in self.key_callbacks:
             now = time.time()
             if now - self.last_key_time > 0.5 or key != self.last_key:
@@ -86,36 +89,36 @@ class KeyboardListener:
                 try:
                     self.key_callbacks[key]['callback']()
                 except Exception as e:
-                    print(f"\n[KEYBOARD] Error executing callback for '{key}': {e}")
+                    print(f"\n[KEYBOARD] 执行 '{key}' 的回调出错：{e}")
     
     def start(self):
-        """Start the keyboard listener in a background thread"""
+        """在后台线程中启动键盘监听器"""
         if self.running:
             return
         
         self.running = True
         self.thread = threading.Thread(target=self._listener_loop, daemon=True)
         self.thread.start()
-        print("[KEYBOARD] Listener started")
+        print("[KEYBOARD] 监听器已启动")
     
     def stop(self):
-        """Stop the keyboard listener"""
+        """停止键盘监听器"""
         if not self.running:
             return
         
         self.running = False
         if self.thread:
             self.thread.join(timeout=1.0)
-        print("[KEYBOARD] Listener stopped")
+        print("[KEYBOARD] 监听器已停止")
     
     def get_help_text(self):
-        """Get help text for all registered keys"""
+        """获取所有已注册按键的帮助文本"""
         if not self.key_callbacks:
-            return "No keyboard shortcuts registered"
+            return "未注册键盘快捷键"
         
-        lines = ["Keyboard shortcuts:"]
+        lines = ["键盘快捷键："]
         for key, info in sorted(self.key_callbacks.items()):
-            desc = info['description'] or 'No description'
+            desc = info['description'] or '无说明'
             lines.append(f"  [{key.upper()}] {desc}")
         
         return "\n".join(lines)

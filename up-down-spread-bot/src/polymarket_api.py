@@ -1,5 +1,5 @@
 """
-Polymarket API integration for market outcome verification
+Polymarket API 集成——用于市场结果验证
 """
 
 import requests
@@ -10,9 +10,9 @@ GAMMA_API = "https://gamma-api.polymarket.com"
 
 def get_market_outcome(slug: str, timeout: int = 10) -> Dict:
     """
-    Get market outcome from Polymarket API
+    从 Polymarket API 获取市场结果
     
-    Returns:
+    返回：
         {
             "success": bool,
             "winner": "UP" | "DOWN" | None,
@@ -44,7 +44,7 @@ def get_market_outcome(slug: str, timeout: int = 10) -> Dict:
         
         market = markets[0]
         
-        # Parse outcomes and prices
+        # 解析结果和价格
         outcomes = market.get("outcomes", [])
         prices = market.get("outcomePrices", [])
         
@@ -53,11 +53,11 @@ def get_market_outcome(slug: str, timeout: int = 10) -> Dict:
         if isinstance(prices, str):
             prices = json.loads(prices)
         
-        # Get status
+        # 获取状态
         closed = market.get("closed", False)
         resolved = market.get("resolved", False)
         
-        # Determine winner by prices (winner has price = $1.00)
+        # 通过价格确定赢家（赢家价格为 $1.00）
         winner = None
         if prices and len(prices) >= 2:
             price_up = float(prices[0])
@@ -92,4 +92,3 @@ def get_market_outcome(slug: str, timeout: int = 10) -> Dict:
             "success": False,
             "error": f"Unexpected error: {str(e)}"
         }
-

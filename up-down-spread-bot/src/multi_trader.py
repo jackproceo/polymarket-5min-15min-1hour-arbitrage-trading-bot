@@ -1,6 +1,6 @@
 """
-Multi-Trader Manager
-Manages 4 isolated Trader instances (2 strategies × 2 coins) with complete separation
+多交易器管理器
+管理 4 个独立的交易器实例（2 个策略 × 2 个币种），完全隔离
 """
 from typing import Dict, Optional
 from pathlib import Path
@@ -8,21 +8,21 @@ from trader import Trader
 
 
 class MultiTrader:
-    """Manage multiple isolated trading strategies"""
+    """管理多个独立交易策略"""
     
     def __init__(self, capital_per_strategy: float = 10000, strategy_names: list = None, config: dict = None):
         """
-        Initialize isolated traders
+        初始化独立交易器
         
-        Args:
-            capital_per_strategy: Starting capital for each strategy
-            strategy_names: List of strategy names (if None, use default 6)
-            config: Configuration dict (for stop-loss checks)
+        参数：
+            capital_per_strategy: 每个策略的起始资金
+            strategy_names: 策略名称列表（如果为 None，则使用默认 6 个）
+            config: 配置字典（用于止损检查）
         """
         self.capital_per_strategy = capital_per_strategy
         self.config = config
         
-        # Use provided strategy names or default 6
+        # 使用提供的策略名称或默认 6 个
         if strategy_names is None:
             strategy_names = [
                 'v1_current',
@@ -34,7 +34,7 @@ class MultiTrader:
             ]
         
         self.traders = {}
-        # Get project root (parent of src directory)
+        # 获取项目根目录（src 的父目录）
         project_root = Path(__file__).parent.parent
         
         for name in strategy_names:
@@ -52,24 +52,24 @@ class MultiTrader:
                       entry_reason: str = 'normal',
                       seconds_till_end: int = 0, time_from_start: int = 0) -> bool:
         """
-        Enter position for specific strategy (isolated)
+        为特定策略开仓（隔离）
         
-        Args:
-            strategy_name: Which strategy's trader to use
-            market_slug: Market identifier
-            side: 'UP' or 'DOWN'
-            price: Entry price
-            contracts: Number of contracts
-            up_ask: Current UP ask price (for detailed logging)
-            down_ask: Current DOWN ask price (for detailed logging)
-            winner_ratio: Current winner ratio (for detailed logging)
-            is_recovery: Is this a recovery entry? (for detailed logging)
-            entry_reason: Reason for entry (for detailed logging)
-            seconds_till_end: Seconds until market end (for detailed logging)
-            time_from_start: Seconds from market start (for detailed logging)
+        参数：
+            strategy_name: 使用哪个策略的交易器
+            market_slug: 市场标识符
+            side: 'UP' 或 'DOWN'
+            price: 入场价格
+            contracts: 合约数量
+            up_ask: 当前 UP 卖价（用于详细日志）
+            down_ask: 当前 DOWN 卖价（用于详细日志）
+            winner_ratio: 当前胜率（用于详细日志）
+            is_recovery: 是否为恢复性入场？（用于详细日志）
+            entry_reason: 入场原因（用于详细日志）
+            seconds_till_end: 距离市场结束的秒数（用于详细日志）
+            time_from_start: 距市场开始的秒数（用于详细日志）
             
-        Returns:
-            True if entered successfully
+        返回：
+            成功入场返回 True
         """
         if strategy_name not in self.traders:
             print(f"[ERROR] Unknown strategy: {strategy_name}")
@@ -97,17 +97,17 @@ class MultiTrader:
     def close_market(self, strategy_name: str, market_slug: str, 
                      winner: str, btc_start: float, btc_final: float) -> Optional[Dict]:
         """
-        Close market for specific strategy (isolated)
+        为特定策略平仓（隔离）
         
-        Args:
-            strategy_name: Which strategy's trader to use
-            market_slug: Market identifier
-            winner: 'UP' or 'DOWN'
-            btc_start: Starting BTC price
-            btc_final: Final BTC price
+        参数：
+            strategy_name: 使用哪个策略的交易器
+            market_slug: 市场标识符
+            winner: 'UP' 或 'DOWN'
+            btc_start: 起始 BTC 价格
+            btc_final: 最终 BTC 价格
             
-        Returns:
-            Trade result dict or None
+        返回：
+            交易结果字典或 None
         """
         if strategy_name not in self.traders:
             print(f"[ERROR] Unknown strategy: {strategy_name}")
@@ -129,18 +129,18 @@ class MultiTrader:
                                 exit_price: float, exit_reason: str = 'early_exit',
                                 up_bid: float = None, down_bid: float = None) -> Optional[Dict]:
         """
-        Close market with early exit for specific strategy
+        为特定策略提前平仓
         
-        Args:
-            strategy_name: Which strategy's trader to use
-            market_slug: Market identifier
-            exit_price: Current favorite price
-            exit_reason: Reason for exit ('stop_loss', 'flip_stop', 'early_exit')
-            up_bid: Current UP bid price (for selling)
-            down_bid: Current DOWN bid price (for selling)
+        参数：
+            strategy_name: 使用哪个策略的交易器
+            market_slug: 市场标识符
+            exit_price: 当前优势方价格
+            exit_reason: 退出原因（'stop_loss'、'flip_stop'、'early_exit'）
+            up_bid: 当前 UP 买价（用于卖出）
+            down_bid: 当前 DOWN 买价（用于卖出）
         
-        Returns:
-            Trade result dict or None
+        返回：
+            交易结果字典或 None
         """
         if strategy_name not in self.traders:
             print(f"[ERROR] Unknown strategy: {strategy_name}")
@@ -160,15 +160,15 @@ class MultiTrader:
             return None
     
     def get_trader(self, strategy_name: str) -> Optional[Trader]:
-        """Get specific trader instance"""
+        """获取特定交易器实例"""
         return self.traders.get(strategy_name)
     
     def get_all_traders(self) -> Dict[str, Trader]:
-        """Get all trader instances"""
+        """获取所有交易器实例"""
         return self.traders
     
     def get_portfolio_stats(self) -> Dict:
-        """Get aggregate portfolio statistics"""
+        """获取投资组合汇总统计"""
         total_capital = 0
         total_pnl = 0
         total_trades = 0
@@ -209,16 +209,16 @@ class MultiTrader:
     
     def get_market_stats(self, strategy_name: str, market_slug: str, up_current: float = 0.5, down_current: float = 0.5) -> Optional[Dict]:
         """
-        Get market statistics for specific strategy
+        获取特定策略的市场统计
         
-        Args:
-            strategy_name: Which strategy's trader to use
-            market_slug: Market identifier
-            up_current: Current UP ask price for unrealized PnL
-            down_current: Current DOWN ask price for unrealized PnL
+        参数：
+            strategy_name: 使用哪个策略的交易器
+            market_slug: 市场标识符
+            up_current: 当前 UP 卖价（用于未实现盈亏计算）
+            down_current: 当前 DOWN 卖价（用于未实现盈亏计算）
             
-        Returns:
-            Market stats dict or None if no position
+        返回：
+            市场统计字典，若无持仓则返回 None
         """
         if strategy_name not in self.traders:
             return None
@@ -227,7 +227,7 @@ class MultiTrader:
         return trader.get_market_stats(market_slug, up_current, down_current)
     
     def get_current_positions(self, strategy_name: str, market_slug: str) -> Optional[Dict]:
-        """Get current positions for specific strategy and market"""
+        """获取特定策略和市场的当前持仓"""
         if strategy_name not in self.traders:
             return None
         
@@ -246,14 +246,14 @@ class MultiTrader:
     
     def get_session_stats(self, strategy_name: str, markets_skipped: int = 0) -> Dict:
         """
-        Get session statistics for a strategy/coin
+        获取策略/币种的会话统计
         
-        Args:
-            strategy_name: Strategy identifier (e.g. 'late_v3_btc')
-            markets_skipped: Number of skipped markets (tracked externally)
+        参数：
+            strategy_name: 策略标识符（例如 'late_v3_btc'）
+            markets_skipped: 跳过的市场数量（外部跟踪）
         
-        Returns:
-            Dict with session statistics
+        返回：
+            包含会话统计的字典
         """
         if strategy_name not in self.traders:
             return {
@@ -270,7 +270,7 @@ class MultiTrader:
         trader = self.traders[strategy_name]
         stats = trader.get_performance_stats()
         
-        # Count exit types
+        # 统计退出类型
         stop_losses = sum(1 for t in trader.closed_trades 
                          if t.get('exit_reason') == 'stop_loss')
         flip_stops = sum(1 for t in trader.closed_trades 
@@ -286,5 +286,3 @@ class MultiTrader:
             'stop_losses': stop_losses,
             'flip_stops': flip_stops,
         }
-
-

@@ -109,6 +109,7 @@ class WebDashboardConfig:
     enabled: bool = False
     host: str = "127.0.0.1"
     port: int = 8765
+    password: str = ""  # Empty = no auth; set DASHBOARD_PASSWORD in .env to require login
 
 
 @dataclass
@@ -153,7 +154,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         config_path = PROJECT_ROOT / "config.json"
     
     # Load JSON config
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     
     # Market interval (5 or 15 minutes)
@@ -233,6 +234,7 @@ def load_config(config_path: Optional[str] = None) -> Config:
         enabled=bool(web_data.get("enabled", False)),
         host=str(web_data.get("host", "127.0.0.1")),
         port=int(web_data.get("port", 8765)),
+        password=os.getenv("DASHBOARD_PASSWORD", ""),
     )
     
     # Polymarket (from env only - secrets)

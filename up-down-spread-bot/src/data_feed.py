@@ -1,5 +1,5 @@
 """
-Multi-Market data feed: Polymarket orderbook for 4 coins
+多市场数据源：4 个币种的 Polymarket 订单簿
 """
 import json
 import time
@@ -17,15 +17,15 @@ from position_tracker import PositionTracker
 
 
 class DataFeed:
-    """Polymarket orderbooks for BTC, ETH, SOL, XRP (configurable 5m or 15m windows)."""
+    """BTC、ETH、SOL、XRP 的 Polymarket 订单簿（可配置 5m 或 15m 窗口）。"""
     
     def __init__(self, config: Dict):
         self.config = config
         
-        # ✅ POSITION TRACKER - single source of truth for positions!
+        # ✅ 仓位跟踪器 - 仓位数据的唯一真实来源！
         self.position_tracker = PositionTracker()
         
-        # API credentials for authenticated WebSocket
+        # 经过身份验证的 WebSocket 所需的 API 凭据
         self.api_key = os.getenv('POLYMARKET_API_KEY')
         self.api_secret = os.getenv('POLYMARKET_API_SECRET')
         self.api_passphrase = os.getenv('POLYMARKET_API_PASSPHRASE')
@@ -34,7 +34,7 @@ class DataFeed:
         self.market_interval_sec = int(pm.get("market_interval_sec", 900))
         if self.market_interval_sec <= 0:
             self.market_interval_sec = 900
-        # Slug: {coin}-updown-5m-{slot} or {coin}-updown-15m-{slot}
+        # Slug 格式：{coin}-updown-5m-{slot} 或 {coin}-updown-15m-{slot}
         if self.market_interval_sec == 300:
             self.market_slug_suffix = "5m"
         elif self.market_interval_sec == 900:
@@ -74,11 +74,11 @@ class DataFeed:
                 "market_start_price": 0.0,
             }
         
-        # Current prices (only BTC and ETH have price feeds)
+        # 当前价格（仅 BTC 和 ETH 有价格数据源）
         self.btc_price = 0.0
         self.eth_price = 0.0
         
-        # Thread safety - per-coin locks for full parallelism
+        # 线程安全 - 每币种独立锁，实现完全并行
         self.locks = {
             'btc': threading.Lock(),
             'eth': threading.Lock(),
@@ -87,26 +87,26 @@ class DataFeed:
         }
         self.stop_event = threading.Event()
         
-        # Threads
+        # 线程
         self.threads = []
         
-        # Event-driven callbacks for price updates
+        # 事件驱动的价格更新回调
         self.price_callbacks = []
     
     def start(self):
-        """Start data streams for BTC, ETH, SOL, XRP + User Channel"""
-        # Polymarket WebSocket for all 4 coins
+        """启动 BTC、ETH、SOL、XRP 的数据流 + 用户频道"""
+        # 所有 4 个币种的 Polymarket WebSocket
         for coin in ['btc', 'eth', 'sol', 'xrp']:
             pm_thread = threading.Thread(target=self._polymarket_worker, args=(coin,), daemon=True)
             pm_thread.start()
             self.threads.append(pm_thread)
             print(f"[DATA] Started Polymarket feed for {coin.upper()}")
         
-        # ❌ USER CHANNEL DISABLED - WebSocket auth doesn't work
-        # Using REST API takingAmount/makingAmount instead!
+        # ❌ 用户频道已禁用 - WebSocket 认证无法使用
+        # 改用 REST API takingAmount/makingAmount！
         print(f"[DATA] ℹ️  Position tracking via REST API responses")
         
-        # Start local timer update (fixes timer freeze)
+        # 启动本地计时器更新（修复计时器冻结问题）
         timer_thread = threading.Thread(target=self._timer_worker, daemon=True)
         timer_thread.start()
         self.threads.append(timer_thread)
@@ -117,11 +117,11 @@ class DataFeed:
         )
     
     def stop(self):
-        """Stop all data streams"""
+        """停止所有数据流"""
         print("[DATA] Stopping feeds...")
         self.stop_event.set()
         
-        # Give threads time to cleanup
+        # 给线程时间清理
         for t in self.threads:
             if t.is_alive():
                 t.join(timeout=1)
@@ -129,21 +129,21 @@ class DataFeed:
         print("[DATA] Feeds stopped")
     
     def get_state(self, coin: str = 'btc') -> Dict:
-        """Get current market state for specified coin (thread-safe)"""
+        """获取指定币种的当前市场状态（线程安全）"""
         with self.locks[coin]:
             market = self.markets.get(coin)
             if not market:
                 return None
             
-            # Price only for BTC and ETH (SOL/XRP don't have price feeds)
+            # 仅 BTC 和 ETH 有价格数据源（SOL/XRP 没有）
             if coin == 'btc':
                 price = self.btc_price
             elif coin == 'eth':
                 price = self.eth_price
             else:
-                price = 0.0  # SOL and XRP don't need price
+                price = 0.0  # SOL 和 XRP 无需价格
             
-            # Safe handling of None values
+            # 安全处理 None 值
             up_ask = market.get('up_ask') or 0.0
             down_ask = market.get('down_ask') or 0.0
             confidence = abs(down_ask - up_ask) if (up_ask > 0 and down_ask > 0) else 0.0
@@ -162,29 +162,29 @@ class DataFeed:
             }
     
     def register_price_callback(self, callback):
-        """Register callback function for price updates (event-driven)"""
+        """注册价格更新回调函数（事件驱动）"""
         self.price_callbacks.append(callback)
     
     def _current_slug(self, coin: str) -> str:
-        """Calculate current market slug (5m or 15m per config)."""
+        """计算当前市场标识（按配置为 5m 或 15m）。"""
         iv = self.market_interval_sec
         current_slot = int(time.time()) // iv * iv
         return f"{coin}-updown-{self.market_slug_suffix}-{current_slot}"
     
     def _fetch_tokens(self, coin: str) -> Optional[Dict]:
-        """Fetch current market tokens from Polymarket for specified coin"""
+        """从 Polymarket 获取指定币种的当前市场 token"""
         try:
             gamma_api = self.config['data_sources']['polymarket']['gamma_api']
             slug = self._current_slug(coin)
             
-            # Use events API with specific slug
+            # 使用 events API 和特定 slug
             url = f"{gamma_api}/events?slug={slug}"
             resp = requests.get(url, timeout=10)
             resp.raise_for_status()
             
             events = resp.json()
             if not events:
-                # Market not found - may not be open yet
+                # 市场未找到 - 可能尚未开放
                 current_time = int(time.time())
                 iv = self.market_interval_sec
                 next_market = ((current_time // iv) + 1) * iv
@@ -192,20 +192,20 @@ class DataFeed:
                 print(f"[PM-{coin.upper()}] Market {slug} not found (may not be open yet, next in {wait_time}s)")
                 return None
             
-            # Get first market
+            # 获取第一个市场
             market = events[0]["markets"][0]
             clob_token_ids = market.get("clobTokenIds", [])
             outcomes = market.get("outcomes", [])
             condition_id = market.get("conditionId", "")
             neg_risk = market.get("negRisk", True)
             
-            # Parse if string format
+            # 如果是字符串格式则解析
             if isinstance(clob_token_ids, str):
                 clob_token_ids = json.loads(clob_token_ids)
             if isinstance(outcomes, str):
                 outcomes = json.loads(outcomes)
             
-            # Find Up and Down indices
+            # 查找 Up 和 Down 的索引
             up_idx = outcomes.index("Up") if "Up" in outcomes else 0
             down_idx = outcomes.index("Down") if "Down" in outcomes else 1
             
@@ -221,9 +221,9 @@ class DataFeed:
         return None
     
     def _polymarket_worker(self, coin: str):
-        """Polymarket WebSocket worker for specified coin"""
+        """指定币种的 Polymarket WebSocket 工作线程"""
         while not self.stop_event.is_set():
-            # Fetch tokens
+            # 获取 token
             tokens = self._fetch_tokens(coin)
             if not tokens:
                 time.sleep(5)
@@ -232,7 +232,7 @@ class DataFeed:
             with self.locks[coin]:
                 self.markets[coin]['tokens'] = tokens
             
-            # Save token IDs to trader module for real trading
+            # 保存 token ID 到 trader 模块，用于实盘交易
             market_slug = self._current_slug(coin)
             trader_module.set_token_ids(
                 market_slug=market_slug,
@@ -242,13 +242,13 @@ class DataFeed:
                 neg_risk=tokens.get('neg_risk', True)
             )
             
-            # Calculate reconnect time
+            # 计算重连时间
             current_time = int(time.time())
             iv = self.market_interval_sec
             market_end = ((current_time // iv) * iv) + iv
             reconnect_in = market_end - current_time + 2
             
-            # Get market slug
+            # 获取市场标识
             market_slug = self._current_slug(coin)
             
             with self.locks[coin]:
@@ -256,27 +256,27 @@ class DataFeed:
                 self.markets[coin]['market_end_time'] = market_end
                 self.markets[coin]['tokens'] = tokens
                 
-                # ✅ Register market in PositionTracker for tracking via WebSocket
+                # ✅ 在 PositionTracker 中注册市场，用于通过 WebSocket 跟踪
                 self.position_tracker.register_market(
                     market_slug=market_slug,
                     up_token_id=tokens['up'],
                     down_token_id=tokens['down']
                 )
                 
-                # Set market start price only for BTC/ETH (not needed for SOL/XRP)
+                # 仅 BTC/ETH 设置市场起始价格（SOL/XRP 不需要）
                 if self.markets[coin]['market_start_price'] == 0.0:
                     if coin == 'btc':
                         self.markets[coin]['market_start_price'] = self.btc_price
                     elif coin == 'eth':
                         self.markets[coin]['market_start_price'] = self.eth_price
-                    # SOL/XRP: leave at 0.0 (no price feed needed)
+                    # SOL/XRP：保持为 0.0（无需价格数据源）
             
             print(f"[PM-{coin.upper()}] Connected to {market_slug}, reconnect in {reconnect_in}s")
             
-            # Connect WebSocket
+            # 连接 WebSocket
             try:
                 ws_url = self.config['data_sources']['polymarket']['ws_url']
-                ws_ref = [None]  # Store ws reference for closing
+                ws_ref = [None]  # 保存 ws 引用以便关闭
                 
                 ws = websocket.WebSocketApp(
                     ws_url,
@@ -288,6 +288,7 @@ class DataFeed:
                 ws_ref[0] = ws
                 
                 def on_open(ws):
+                    """WebSocket 连接建立后发送市场订阅请求。"""
                     sub_msg = {
                         "auth": {},
                         "type": "MARKET",
@@ -297,12 +298,13 @@ class DataFeed:
                 
                 ws.on_open = on_open
                 
-                # Auto-reconnect timer
+                # 自动重连计时器
                 timer = threading.Timer(reconnect_in, lambda: ws.close())
                 timer.start()
                 
-                # Stop checker thread
+                # 停止检查线程
                 def check_stop():
+                    """监控停止事件，收到信号后关闭 WebSocket。"""
                     while not self.stop_event.is_set():
                         time.sleep(0.5)
                     if ws_ref[0]:
@@ -314,7 +316,7 @@ class DataFeed:
                 ws.run_forever(ping_interval=20, ping_timeout=10, skip_utf8_validation=True)
                 timer.cancel()
                 
-                # Stop immediately if stop_event is set
+                # 如果设置了停止事件，立即停止
                 if self.stop_event.is_set():
                     break
                 
@@ -323,23 +325,23 @@ class DataFeed:
                 time.sleep(5)
     
     def _on_pm_message(self, message: str, tokens: Dict, coin: str):
-        """Parse Polymarket orderbook message for specified coin"""
+        """解析指定币种的 Polymarket 订单簿消息"""
         try:
             data = json.loads(message)
             
             if not isinstance(data, dict):
                 return
             
-            # Only process "book" events (full orderbook snapshots)
+            # 仅处理 "book" 事件（完整订单簿快照）
             event_type = data.get("event_type", "unknown")
             if event_type != "book":
                 return
             
-            # Parse orderbook
+            # 解析订单簿
             asks_raw = data.get("asks", [])
             bids_raw = data.get("bids", [])
             
-            # Parse asks (price, size) tuples
+            # 解析 asks（价格，数量）元组
             asks = []
             for ask in asks_raw or []:
                 if isinstance(ask, dict):
@@ -351,7 +353,7 @@ class DataFeed:
                 if price > 0 and size > 0:
                     asks.append((price, size))
             
-            # Parse bids (price, size) tuples
+            # 解析 bids（价格，数量）元组
             bids = []
             for bid in bids_raw or []:
                 if isinstance(bid, dict):
@@ -363,19 +365,19 @@ class DataFeed:
                 if price > 0 and size > 0:
                     bids.append((price, size))
             
-            # Sort asks ascending (lowest first)
+            # 按价格升序排序 asks（最低价优先）
             asks.sort(key=lambda x: x[0])
             
-            # Sort bids descending (highest first)
+            # 按价格降序排序 bids（最高价优先）
             bids.sort(key=lambda x: x[0], reverse=True)
             
-            # Get best ask (lowest price) and best bid (highest price)
+            # 获取最优 ask（最低价）和最优 bid（最高价）
             best_ask = asks[0] if asks else None
             best_bid = bids[0] if bids else None
             
             asset = data.get("asset_id", "")
             
-            # Update state and trigger callbacks (per-coin lock - fully parallel!)
+            # 更新状态并触发回调（基于每个币种的锁——完全并行！）
             with self.locks[coin]:
                 price_changed = False
                 old_up_ask = self.markets[coin]['up_ask']
@@ -388,18 +390,18 @@ class DataFeed:
                     
                     if asset == tokens.get("up"):
                         self.markets[coin]['up_ask'] = price
-                        self.markets[coin]['up_ask_timestamp'] = time.time()  # Track update time
-                        # Save full orderbook (1 ask level + 5 bid levels)
-                        self.markets[coin]['up_asks_full'] = asks[:1]  # Top 1 ask
-                        self.markets[coin]['up_bids_full'] = bids[:5]  # Top 5 bids
+                        self.markets[coin]['up_ask_timestamp'] = time.time()  # 跟踪更新时间
+                        # 保存完整订单簿（1 档卖盘 + 5 档买盘）
+                        self.markets[coin]['up_asks_full'] = asks[:1]  # 顶部 1 档卖盘
+                        self.markets[coin]['up_bids_full'] = bids[:5]  # 顶部 5 档买盘
                         if price != old_up_ask:
                             price_changed = True
                     elif asset == tokens.get("down"):
                         self.markets[coin]['down_ask'] = price
-                        self.markets[coin]['down_ask_timestamp'] = time.time()  # Track update time
-                        # Save full orderbook (1 ask level + 5 bid levels)
-                        self.markets[coin]['down_asks_full'] = asks[:1]  # Top 1 ask
-                        self.markets[coin]['down_bids_full'] = bids[:5]  # Top 5 bids
+                        self.markets[coin]['down_ask_timestamp'] = time.time()  # 跟踪更新时间
+                        # 保存完整订单簿（1 档卖盘 + 5 档买盘）
+                        self.markets[coin]['down_asks_full'] = asks[:1]  # 顶部 1 档卖盘
+                        self.markets[coin]['down_bids_full'] = bids[:5]  # 顶部 5 档买盘
                         if price != old_down_ask:
                             price_changed = True
                 
@@ -408,46 +410,46 @@ class DataFeed:
                     
                     if asset == tokens.get("up"):
                         self.markets[coin]['up_bid'] = price
-                        self.markets[coin]['up_bid_timestamp'] = time.time()  # Track update time
-                        # Update full orderbook if not set by ask
+                        self.markets[coin]['up_bid_timestamp'] = time.time()  # 跟踪更新时间
+                        # 如果卖盘未设置，则更新完整订单簿
                         if not self.markets[coin]['up_bids_full']:
                             self.markets[coin]['up_bids_full'] = bids[:5]
                         if price != old_up_bid:
                             price_changed = True
                     elif asset == tokens.get("down"):
                         self.markets[coin]['down_bid'] = price
-                        self.markets[coin]['down_bid_timestamp'] = time.time()  # Track update time
-                        # Update full orderbook if not set by ask
+                        self.markets[coin]['down_bid_timestamp'] = time.time()  # 跟踪更新时间
+                        # 如果卖盘未设置，则更新完整订单簿
                         if not self.markets[coin]['down_bids_full']:
                             self.markets[coin]['down_bids_full'] = bids[:5]
                         if price != old_down_bid:
                             price_changed = True
                 
-                # Trigger callbacks if price changed
+                # 价格变化时触发回调
                 if price_changed:
                     up_ask = self.markets[coin]['up_ask']
                     down_ask = self.markets[coin]['down_ask']
                     up_bid = self.markets[coin]['up_bid']
                     down_bid = self.markets[coin]['down_bid']
                     
-                    # Skip if prices not ready yet
+                    # 价格未就绪则跳过
                     if up_ask is None or down_ask is None:
                         price_changed = False
                     else:
                         market_slug = self.markets[coin]['slug']
                         seconds_till_end = self.markets[coin]['seconds_till_end']
                         
-                        # Get price only for BTC/ETH
+                        # 仅 BTC/ETH 获取价格
                         if coin == 'btc':
                             market_price = self.btc_price
                         elif coin == 'eth':
                             market_price = self.eth_price
                         else:
-                            market_price = 0.0  # SOL/XRP don't have price
+                            market_price = 0.0  # SOL/XRP 无需价格
                         
                         market_start_price = self.markets[coin]['market_start_price']
                         
-                        # Build market_state for callback
+                        # 构建回调用的 market_state
                         market_state = {
                             'up_ask': up_ask,
                             'down_ask': down_ask,
@@ -465,25 +467,26 @@ class DataFeed:
                             'coin': coin
                         }
                     
-                    # Call all registered callbacks (outside lock to avoid deadlock)
+                    # 收集所有回调（在锁外调用以避免死锁）
                     callbacks_to_call = list(self.price_callbacks)
             
-            # Call callbacks outside the lock
-            # 🔥 ASYNC: each coin is processed in parallel
+            # 在锁外调用回调
+            # 🔥 异步：每个币种并行处理
             if price_changed and callbacks_to_call:
                 for callback in callbacks_to_call:
                     try:
-                        # Wrapper for safe call
+                        # 安全调用包装器
                         def safe_callback_wrapper():
+                            """在独立线程中安全执行回调，捕获异常不崩溃。"""
                             try:
                                 callback(coin, market_state)
                             except Exception as e:
-                                # Log but don't crash
+                                # 记录日志但不崩溃
                                 print(f"[CALLBACK ERROR] {coin}: {e}")
                                 import traceback
                                 traceback.print_exc()
                         
-                        # 🛡️ Start in separate thread (doesn't block other coins)
+                        # 🛡️ 在独立线程中启动（不阻塞其他币种）
                         threading.Thread(
                             target=safe_callback_wrapper,
                             daemon=True,
@@ -493,13 +496,13 @@ class DataFeed:
                         print(f"[CALLBACK ERROR] Failed to start callback for {coin}: {e}")
                 
         except Exception as e:
-            pass  # Ignore parsing errors
+            pass  # 忽略解析错误
     
     def _timer_worker(self):
-        """Update timer every second locally for all markets (per-coin locks)"""
+        """每秒本地更新所有市场的计时器（基于每个币种的锁）"""
         while not self.stop_event.is_set():
             current_time = int(time.time())
-            # Update each coin's timer independently (fully parallel)
+            # 独立更新每个币种的计时器（完全并行）
             for coin in ['btc', 'eth', 'sol', 'xrp']:
                 with self.locks[coin]:
                     market_end_time = self.markets[coin]['market_end_time']
@@ -508,13 +511,13 @@ class DataFeed:
     
     def _user_channel_worker(self):
         """
-        WebSocket User Channel - source of ALL position data!
+        WebSocket 用户频道——所有持仓数据的来源！
         
-        Connects to authenticated channel and receives:
-        - ORDER events (with size_matched - real amount!)
-        - TRADE events (transaction confirmations)
+        连接经过身份验证的频道并接收：
+        - ORDER 事件（含 size_matched——实际成交数量！）
+        - TRADE 事件（交易确认）
         
-        THIS IS THE SINGLE SOURCE OF TRUTH!
+        这是唯一的数据权威来源！
         """
         reconnect_delay = 5
         
@@ -532,9 +535,9 @@ class DataFeed:
                 )
                 
                 def on_open(ws):
-                    """Send authenticated subscription request"""
+                    """发送经过身份验证的订阅请求"""
                     try:
-                        # Create signature for authentication
+                        # 创建身份验证签名
                         timestamp = str(int(time.time()))
                         message = timestamp
                         signature = hmac.new(
@@ -560,45 +563,45 @@ class DataFeed:
                 
                 ws.on_open = on_open
                 
-                # Run forever (blocking call)
+                # 持续运行（阻塞调用）
                 ws.run_forever()
                 
             except Exception as e:
                 print(f"[USER-WS] ⚠️  Exception: {e}")
             
-            # Reconnect delay
+            # 重连延迟
             if not self.stop_event.is_set():
                 print(f"[USER-WS] ⏳ Reconnecting in {reconnect_delay}s...")
                 time.sleep(reconnect_delay)
     
     def _on_user_message(self, message: str):
         """
-        Process all USER events - SINGLE source of truth!
+        处理所有 USER 事件——唯一的数据权威来源！
         
-        Event types:
-        - order: ORDER events (PLACEMENT/UPDATE/CANCELLATION)
-        - trade: TRADE events (MATCHED/MINED/CONFIRMED)
+        事件类型：
+        - order：ORDER 事件（下单/更新/取消）
+        - trade：TRADE 事件（成交/确认）
         
-        All events are passed to PositionTracker!
+        所有事件都传递给 PositionTracker！
         """
         try:
             data = json.loads(message)
             event_type = data.get("event_type")
             
             if event_type == "order":
-                # ✅ ORDER EVENT - update position via tracker
+                # ✅ ORDER 事件——通过跟踪器更新持仓
                 self.position_tracker.on_order_event(data)
             
             elif event_type == "trade":
-                # ✅ TRADE EVENT - confirm trade
+                # ✅ TRADE 事件——确认交易
                 self.position_tracker.on_trade_event(data)
             
             else:
-                # Other event types (e.g., heartbeat)
+                # 其他事件类型（例如心跳）
                 pass
         
         except json.JSONDecodeError:
-            # Not JSON message (e.g., connection established)
+            # 非 JSON 消息（例如连接建立）
             pass
         except Exception as e:
             print(f"[USER-WS] ⚠️  Parse error: {e}")
