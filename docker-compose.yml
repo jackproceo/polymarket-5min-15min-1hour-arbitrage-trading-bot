@@ -61,6 +61,7 @@ services:
       - ./up-down-spread-bot/config/config.json:/app/config/config.json:ro
       # Persist trades, orders, and bot state to host logs directory
       - ./up-down-spread-bot/logs:/app/logs
+      - ./up-down-spread-bot/data:/app/data
     logging: *default-logging
     networks:
       - polymarket-net

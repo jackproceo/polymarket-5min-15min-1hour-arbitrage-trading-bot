@@ -41,6 +41,10 @@ docker compose up -d --no-deps bot-ptb
 # 3. 重新构建镜像（有缓存的层不会重下，很快）
 docker compose build
 
+docker compose build bot-vwap
+docker compose up -d --no-deps bot-vwap
+
+
 # 4. 重建并重启容器（不中断的滚动更新）
 docker compose up -d --force-recreate
 ```
