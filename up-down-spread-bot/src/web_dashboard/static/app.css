@@ -227,6 +227,7 @@ body {
   text-align: left;
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 
 .data-table th {

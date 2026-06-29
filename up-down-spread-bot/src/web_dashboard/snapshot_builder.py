@@ -100,13 +100,17 @@ def build_snapshot(
     recent.sort(key=lambda x: x.get("close_time", 0), reverse=True)
     recent_trimmed = []
     for t in recent[:12]:
+        slug = t.get("market_slug", "")
         recent_trimmed.append(
             {
-                "strategy": t.get("strategy"),
-                "market_slug": t.get("market_slug"),
+                "close_time": t.get("close_timestamp") or t.get("close_time", ""),
+                "market_slug": slug,
+                "side": t.get("winner", "—"),
                 "pnl": round(float(t.get("pnl", 0)), 2),
-                "winner": t.get("winner"),
-                "close_time": t.get("close_time"),
+                "roi_display": round(t.get("roi_pct", 0), 2) if t.get("roi_pct") is not None else 0,
+                "exit_type": t.get("exit_reason", "market_resolution"),
+                "winner": t.get("winner", ""),
+                "polymarket_url": f"https://polymarket.com/event/{slug}" if slug else "",
             }
         )
 

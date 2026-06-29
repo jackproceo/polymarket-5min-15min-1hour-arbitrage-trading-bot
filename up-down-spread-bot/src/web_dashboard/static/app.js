@@ -136,16 +136,26 @@
         const pnl = t.pnl;
         const cls = pnl >= 0 ? "pnl-pos" : "pnl-neg";
         const m = (t.market_slug || "").split("-").pop() || t.market_slug;
+        const side = t.side || "—";
+        const exitType = t.exit_type || "—";
+        const roi = t.roi_display != null ? (t.roi_display >= 0 ? "+" : "") + t.roi_display.toFixed(2) : "—";
+        const closeTime = t.close_time ? String(t.close_time).slice(0, 19).replace("T", " ") : "—";
+        const url = t.polymarket_url || "";
+        const linkHtml = url ? `<a href="${url}" target="_blank" rel="noopener" class="poly-link">查看</a>` : "—";
         return `<tr>
-        <td>${escapeHtml(t.strategy || "")}</td>
+        <td>${escapeHtml(closeTime)}</td>
         <td>${escapeHtml(m || "")}</td>
-        <td class="${cls}">${fmtUsd(pnl)}</td>
-        <td>${escapeHtml(String(t.winner ?? ""))}</td>
+        <td>${escapeHtml(side)}</td>
+        <td class="${cls}"><strong>${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</strong></td>
+        <td class="${cls}">${roi}</td>
+        <td>${escapeHtml(exitType)}</td>
+        <td>${escapeHtml(t.winner != null ? String(t.winner) : "—")}</td>
+        <td>${linkHtml}</td>
       </tr>`;
       })
       .join("");
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4">本会话暂无已平仓交易</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8">本会话暂无已平仓交易</td></tr>';
     }
   }
 

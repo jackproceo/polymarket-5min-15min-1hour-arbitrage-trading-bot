@@ -165,16 +165,19 @@ def create_app(project_root: Path | None = None) -> Flask:
 
                 # 最近已平仓交易（来自 SQLite）
                 trades = db.get_trades(limit=12)
-                snap["recent_trades"] = [
-                    {
-                        "strategy": t.get("strategy") or "",
-                        "market_slug": t.get("market_slug", ""),
-                        "pnl": round(float(t.get("pnl", 0)), 2),
-                        "winner": t.get("winner", ""),
+                def _t2r(t):
+                    slug = t.get("market_slug", "")
+                    return {
                         "close_time": t.get("close_time", ""),
+                        "market_slug": slug,
+                        "side": t.get("side", "—"),
+                        "pnl": round(float(t.get("pnl", 0)), 2),
+                        "roi_display": round(t.get("roi_pct", 0), 2) if t.get("roi_pct") is not None else 0,
+                        "exit_type": t.get("exit_type", "—"),
+                        "winner": t.get("winner", ""),
+                        "polymarket_url": f"https://polymarket.com/event/{slug}" if slug else "",
                     }
-                    for t in trades
-                ]
+                snap["recent_trades"] = [_t2r(t) for t in trades]
         except Exception:
             pass  # SQLite 不可用时回退到内存数据
 
