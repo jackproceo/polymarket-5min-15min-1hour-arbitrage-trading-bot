@@ -553,7 +553,6 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     
     .tab.active {
       background: var(--panel-glass);
-      color: white;
       box-shadow: var(--shadow-sm);
     }
 
