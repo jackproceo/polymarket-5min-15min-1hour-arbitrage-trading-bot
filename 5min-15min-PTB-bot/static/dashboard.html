@@ -428,7 +428,9 @@
   <header class="header">
     <div class="header-left">
       <div class="header-title">Polymarket BTC 自动交易</div>
-      <div class="header-sub">市场: <a id="marketSlug" href="#" target="_blank" style="color:var(--accent);text-decoration:none">-</a> &middot; <span id="simMode"></span></div>
+      <div class="header-sub">市场: <a id="marketSlug" href="#" target="_blank" style="color:var(--accent);text-decoration:none">-</a> &middot; <span id="simMode"></span>
+      docker: bot-ptb 文件夹:5min-15min-PTB-bot
+      </div>
     </div>
     <div class="header-right">
       <div class="interval-group" role="group" aria-label="周期切换">
@@ -828,13 +830,26 @@ const clsSide = (s) => { if(!s) return ""; const u=String(s).toUpperCase(); retu
 
 // ── 从 DB 获取数据 ──
 async function fetchDbStats() {
-  try { const r=await authFetch("/api/db/stats"); if(r.ok) dbStats=await r.json(); } catch(e){}
+  try { const r=await authFetch("/api/db/stats"); if(r.ok) dbStats=await r.json(); } catch(e){ console.error("fetchDbStats err", e); }
 }
 async function fetchDbAccount() {
-  try { const r=await authFetch("/api/db/account"); if(r.ok) dbAccount=await r.json(); } catch(e){}
+  try { const r=await authFetch("/api/db/account"); if(r.ok) dbAccount=await r.json(); } catch(e){ console.error("fetchDbAccount err", e); }
 }
 async function fetchDbTrades() {
-  try { const r=await authFetch("/api/db/trades?limit=100"); if(r.ok){ const j=await r.json(); if(j&&j.items) dbTrades=j.items; } } catch(e){}
+  // 统一用 allTrades 作为首页和交易记录页的单一数据源
+  try {
+    const r = await authFetch("/api/db/trades?limit=200");
+    if (!r.ok) { console.error("fetchDbTrades http", r.status); return; }
+    const j = await r.json();
+    if (j && j.items) {
+      allTrades = j.items;
+      dbTrades = j.items;  // 兼容首页 renderDbTrades
+      if (currentPage === "trades") renderTradeHistory();
+      renderDbTrades();    // 首页交易记录表格也刷新
+    } else {
+      console.warn("fetchDbTrades: empty items", j);
+    }
+  } catch(e) { console.error("fetchDbTrades err", e); }
 }
 
 // ── 渲染 DB 数据 ──
@@ -1044,7 +1059,7 @@ function switchPage(pageId) {
   document.querySelectorAll(".page-nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.page === pageId);
   });
-  if (pageId === "trades") { fetchAllTrades().then(renderTradeHistory); }
+  if (pageId === "trades") { fetchDbTrades().then(renderTradeHistory); }
   if (pageId === "stats") { fetchStatsDetail().then(renderStatsDetail); }
   if (pageId === "balance") { fetchBalanceHistory().then(renderBalanceHistory); }
 }
@@ -1057,13 +1072,6 @@ document.getElementById("pageNav").addEventListener("click", e => {
 let allTrades = [];
 let tradeFilterSide = "all";
 let tradeFilterResult = "all";
-
-async function fetchAllTrades() {
-  try {
-    const r = await authFetch("/api/db/trades?limit=200");
-    if (r.ok) { const j = await r.json(); if (j && j.items) { allTrades = j.items; if (currentPage === "trades") renderTradeHistory(); } }
-  } catch(_) {}
-}
 
 function renderTradeHistory() {
   let rows = allTrades;
@@ -1278,11 +1286,9 @@ function initApp() {
   setInterval(pollStatus, 5000);
   setInterval(pollLogs, 2000);
 
-  // 新页面数据轮询
-  fetchAllTrades();
+  // 子页面数据轮询（首页交易记录已由 pollDb → fetchDbTrades 覆盖）
   fetchBalanceHistory();
   fetchStatsDetail();
-  setInterval(fetchAllTrades, 5000);
   setInterval(fetchBalanceHistory, 10000);
   setInterval(fetchStatsDetail, 10000);
 }
