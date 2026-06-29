@@ -428,7 +428,8 @@ def start_web_server():
         return
 
     def run():
-        app.run(host=WEB_HOST, port=WEB_PORT, threaded=True, use_reloader=False)
+        from waitress import serve
+        serve(app, host=WEB_HOST, port=WEB_PORT, threads=8, channel_timeout=60)
 
     t = threading.Thread(target=run, daemon=True)
     t.start()
