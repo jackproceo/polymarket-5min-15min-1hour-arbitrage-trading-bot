@@ -154,9 +154,36 @@ def api_db_trades():
     err = _require_pwd()
     if err:
         return err
-    limit = request.args.get("limit", 100, type=int)
-    rows = get_recent_trades(limit)
-    return jsonify({"items": [dict(r) for r in rows]})
+    try:
+        limit = request.args.get("limit", 100, type=int)
+        rows = get_recent_trades(limit)
+        return jsonify({"items": _safe_rows(rows)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"items": [], "error": str(e)}), 500
+
+
+def _safe_row(row):
+    """将 sqlite3.Row 安全转为可 JSON 序列化的 dict。"""
+    if row is None:
+        return {}
+    item = {}
+    for key in row.keys():
+        val = row[key]
+        if isinstance(val, bytes):
+            item[key] = val.decode("utf-8", errors="replace")
+        elif val is None:
+            item[key] = None
+        elif isinstance(val, (int, float, str, bool)):
+            item[key] = val
+        else:
+            item[key] = str(val)
+    return item
+
+
+def _safe_rows(rows):
+    return [_safe_row(r) for r in (rows or [])]
 
 
 @app.route("/api/db/account")
@@ -164,10 +191,13 @@ def api_db_account():
     err = _require_pwd()
     if err:
         return err
-    row = get_latest_account_snapshot()
-    if row is None:
-        return jsonify({})
-    return jsonify(dict(row))
+    try:
+        row = get_latest_account_snapshot()
+        return jsonify(_safe_row(row))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/db/account-history")
@@ -175,9 +205,14 @@ def api_db_account_history():
     err = _require_pwd()
     if err:
         return err
-    limit = request.args.get("limit", 50, type=int)
-    rows = get_account_history(limit)
-    return jsonify({"items": [dict(r) for r in rows]})
+    try:
+        limit = request.args.get("limit", 50, type=int)
+        rows = get_account_history(limit)
+        return jsonify({"items": _safe_rows(rows)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"items": [], "error": str(e)}), 500
 
 
 @app.route("/api/db/stats/detail")
@@ -199,7 +234,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL'
         GROUP BY open_reason ORDER BY cnt DESC
     """).fetchall()
-    result["by_reason"] = [dict(r) for r in rows]
+    result["by_reason"] = _safe_rows(rows)
 
     # 按方向分组
     rows = conn.execute("""
@@ -211,7 +246,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL'
         GROUP BY side ORDER BY cnt DESC
     """).fetchall()
-    result["by_side"] = [dict(r) for r in rows]
+    result["by_side"] = _safe_rows(rows)
 
     # 按市场周期分组
     rows = conn.execute("""
@@ -223,7 +258,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL'
         GROUP BY btc_market_minutes ORDER BY cnt DESC
     """).fetchall()
-    result["by_minutes"] = [dict(r) for r in rows]
+    result["by_minutes"] = _safe_rows(rows)
 
     # 按入场价格区间分组
     rows = conn.execute("""
@@ -244,7 +279,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL' AND entry_price IS NOT NULL
         GROUP BY price_range ORDER BY price_range
     """).fetchall()
-    result["by_entry_price"] = [dict(r) for r in rows]
+    result["by_entry_price"] = _safe_rows(rows)
 
     # 按差价区间分组
     rows = conn.execute("""
@@ -264,7 +299,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL'
         GROUP BY diff_range ORDER BY diff_range
     """).fetchall()
-    result["by_diff"] = [dict(r) for r in rows]
+    result["by_diff"] = _safe_rows(rows)
 
     # 按日期分组
     rows = conn.execute("""
@@ -277,7 +312,7 @@ def api_db_stats_detail():
         FROM trades WHERE action='SELL'
         GROUP BY day ORDER BY day DESC
     """).fetchall()
-    result["by_day"] = [dict(r) for r in rows]
+    result["by_day"] = _safe_rows(rows)
 
     # BUY 操作记录数（开仓频率）
     buy_cnt = conn.execute("SELECT COUNT(*) as cnt FROM trades WHERE action='BUY'").fetchone()
