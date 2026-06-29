@@ -428,7 +428,7 @@
   <header class="header">
     <div class="header-left">
       <div class="header-title">Polymarket BTC 自动交易</div>
-      <div class="header-sub">市场: <span id="marketSlug">-</span> &middot; <span id="simMode"></span></div>
+      <div class="header-sub">市场: <a id="marketSlug" href="#" target="_blank" style="color:var(--accent);text-decoration:none">-</a> &middot; <span id="simMode"></span></div>
     </div>
     <div class="header-right">
       <div class="interval-group" role="group" aria-label="周期切换">
@@ -820,7 +820,7 @@ const priceTrend = { chainlink: {base:null,sec:0}, binance: {base:null,sec:0}, u
 const maybeNum = (v) => { if (v===null||v===void 0||v==="") return null; const n=Number(v); return Number.isFinite(n)?n:null; };
 const fmt = (n,d) => n===null||n===void 0||!Number.isFinite(Number(n)) ? "-" : Number(n).toLocaleString("en-US",{minimumFractionDigits:d||2,maximumFractionDigits:d||2});
 const fmtPct = (v) => v===null||v===void 0 ? "-" : (Number(v)*100).toFixed(2)+"%";
-const fmtSigned = (v,d) => { if(v===null||v===void 0) return "--"; const n=Number(v); if(!Number.isFinite(n)) return "--"; return (n>=0?"+":"")+"$"+Math.abs(n).toFixed(d||2); };
+const fmtSigned = (v,d) => { if(v===null||v===void 0) return "--"; const n=Number(v); if(!Number.isFinite(n)) return "--"; return (n>=0?"+":"-")+"$"+Math.abs(n).toFixed(d||2); };
 const fmtPrice = (v) => v===null||v===void 0 ? "-" : "$"+fmt(v,2);
 const fmtTime = (iso) => { if(!iso) return "-"; try{const d=new Date(iso); return Number.isFinite(d.getTime())?d.toLocaleString("zh-CN",{hour12:false}):String(iso).slice(0,19);}catch(e){return String(iso).slice(0,19);} };
 const clsPnl = (v) => { if(v===null||v===void 0) return ""; const n=Number(v); return n>0?"text-up":n<0?"text-down":""; };
@@ -916,7 +916,9 @@ function renderMarket(data) {
   marketData = data;
   latestPrices = prices;
 
-  $("marketSlug").textContent = mkt.slug || "-";
+  const slug = mkt.slug || "";
+  $("marketSlug").textContent = slug || "-";
+  $("marketSlug").href = slug ? "https://polymarket.com/zh/event/" + slug : "#";
   $("updatedAt").textContent = "更新 "+(data.updated_at ? fmtTime(data.updated_at) : "--");
 
   const sim = data.simulation_mode;
@@ -1042,9 +1044,9 @@ function switchPage(pageId) {
   document.querySelectorAll(".page-nav-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.page === pageId);
   });
-  if (pageId === "trades") renderTradeHistory();
+  if (pageId === "trades") { fetchAllTrades().then(renderTradeHistory); }
   if (pageId === "stats") { fetchStatsDetail().then(renderStatsDetail); }
-  if (pageId === "balance") renderBalanceHistory();
+  if (pageId === "balance") { fetchBalanceHistory().then(renderBalanceHistory); }
 }
 document.getElementById("pageNav").addEventListener("click", e => {
   const btn = e.target.closest(".page-nav-btn");
@@ -1059,7 +1061,7 @@ let tradeFilterResult = "all";
 async function fetchAllTrades() {
   try {
     const r = await authFetch("/api/db/trades?limit=200");
-    if (r.ok) { const j = await r.json(); if (j && j.items) allTrades = j.items; }
+    if (r.ok) { const j = await r.json(); if (j && j.items) { allTrades = j.items; if (currentPage === "trades") renderTradeHistory(); } }
   } catch(_) {}
 }
 
@@ -1142,7 +1144,7 @@ let balanceHistory = [];
 async function fetchBalanceHistory() {
   try {
     const r = await authFetch("/api/db/account-history?limit=200");
-    if (r.ok) { const j = await r.json(); if (j && j.items) balanceHistory = j.items; }
+    if (r.ok) { const j = await r.json(); if (j && j.items) { balanceHistory = j.items; if (currentPage === "balance") renderBalanceHistory(); } }
   } catch(_) {}
 }
 
@@ -1198,7 +1200,7 @@ let statsDetail = null;
 async function fetchStatsDetail() {
   try {
     const r = await authFetch("/api/db/stats/detail");
-    if (r.ok) statsDetail = await r.json();
+    if (r.ok) { statsDetail = await r.json(); if (currentPage === "stats") renderStatsDetail(); }
   } catch(_) {}
 }
 

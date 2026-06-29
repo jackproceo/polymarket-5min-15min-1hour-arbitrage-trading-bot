@@ -114,3 +114,6 @@ Thumbs.db
 
 config.json
 *.md
+jack*.txt
+jack*.log
+jack*.md
