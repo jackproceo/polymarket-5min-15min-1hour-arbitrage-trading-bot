@@ -225,22 +225,34 @@ def api_db_check():
     result["repair_result"] = ""
     if request.args.get("repair") == "1":
         result["repair_attempted"] = True
+        ops = []
         try:
-            # 尝试 VACUUM 重建数据库
-            conn.execute("VACUUM")
+            conn.execute("REINDEX")
             conn.commit()
-            result["repair_result"] = "VACUUM completed"
+            ops.append("REINDEX all indexes")
         except Exception as e:
-            result["repair_result"] = f"VACUUM failed: {e}"
-            # 尝试导出到新库
-            try:
-                import shutil, os
-                src = os.environ.get("DB_PATH", "") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "trading.db")
-                bak = src + ".bak." + str(int(time.time()))
-                shutil.copy2(src, bak)
-                result["repair_result"] += f" | backup saved to {bak}"
-            except Exception as e2:
-                result["repair_result"] += f" | backup failed: {e2}"
+            ops.append(f"REINDEX failed: {e}")
+            # 降级：逐个重建损坏的索引
+            for idx in ["idx_trades_status", "idx_trades_created", "idx_trades_slug"]:
+                try:
+                    conn.execute(f"REINDEX {idx}")
+                    conn.commit()
+                    ops.append(f"REINDEX {idx}")
+                except Exception as e2:
+                    ops.append(f"REINDEX {idx}: {e2}")
+                    try:
+                        conn.execute(f"DROP INDEX IF EXISTS {idx}")
+                        conn.commit()
+                        ops.append(f"DROPPED {idx} (will be recreated on next init)")
+                    except Exception as e3:
+                        ops.append(f"DROP {idx}: {e3}")
+        result["repair_result"] = " | ".join(ops)
+        # 修复后再次检查
+        try:
+            rows = conn.execute("PRAGMA integrity_check").fetchall()
+            result["after_repair"] = [dict(r) for r in rows]
+        except Exception as e:
+            result["after_repair"] = [{"error": str(e)}]
     return jsonify(result)
 
 
