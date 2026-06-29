@@ -41,9 +41,11 @@
           <thead>
             <tr>
               <th>平仓时间</th>
+              <th>货币</th>
               <th>市场</th>
               <th>方向</th>
               <th>入场价</th>
+              <th>平仓价</th>
               <th>合约数</th>
               <th>投入 ($)</th>
               <th>盈亏 ($)</th>
@@ -90,12 +92,13 @@
         const rows = data.trades || [];
         tradeCount.textContent = `共 ${data.total} 条记录`;
         if (!rows.length) {
-          tbody.innerHTML = '<tr><td colspan="12">暂无交易记录</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="14">暂无交易记录</td></tr>';
           return;
         }
         tbody.innerHTML = rows.map(t => {
           const pnl = t.pnl_display || 0;
           const pnlCls = pnl >= 0 ? "pnl-pos" : "pnl-neg";
+          const coin = t.coin || "—";
           const side = t.side || "—";
           const winner = t.winner || "—";
           const exitType = t.exit_type || "—";
@@ -106,9 +109,11 @@
           const slugShort = (t.market_slug || "").split("-").pop() || t.market_slug || "—";
           return `<tr>
             <td class="cell-nobreak">${escapeHtml(t.close_time || t.close_timestamp || "—")}</td>
+            <td>${escapeHtml(coin)}</td>
             <td title="${escapeHtml(t.market_slug || "")}">${escapeHtml(slugShort)}</td>
             <td>${escapeHtml(side)}</td>
             <td>${t.entry_price != null ? t.entry_price.toFixed(4) : "—"}</td>
+            <td>${t.exit_price != null ? Number(t.exit_price).toFixed(4) : "—"}</td>
             <td>${t.contracts != null ? Number(t.contracts).toFixed(2) : "—"}</td>
             <td>${t.size_usd != null ? t.size_usd.toFixed(2) : "—"}</td>
             <td class="${pnlCls}"><strong>${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</strong></td>

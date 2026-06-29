@@ -136,7 +136,10 @@
         const pnl = t.pnl;
         const cls = pnl >= 0 ? "pnl-pos" : "pnl-neg";
         const m = (t.market_slug || "").split("-").pop() || t.market_slug;
+        const coin = t.coin || "—";
         const side = t.side || "—";
+        const entryPrice = t.entry_price != null ? Number(t.entry_price).toFixed(4) : "—";
+        const exitPrice = t.exit_price != null ? Number(t.exit_price).toFixed(4) : "—";
         const exitType = t.exit_type || "—";
         const roi = t.roi_display != null ? (t.roi_display >= 0 ? "+" : "") + t.roi_display.toFixed(2) : "—";
         const closeTime = t.close_time ? String(t.close_time).slice(0, 19).replace("T", " ") : "—";
@@ -144,8 +147,11 @@
         const linkHtml = url ? `<a href="${url}" target="_blank" rel="noopener" class="poly-link">查看</a>` : "—";
         return `<tr>
         <td>${escapeHtml(closeTime)}</td>
+        <td>${escapeHtml(coin)}</td>
         <td>${escapeHtml(m || "")}</td>
         <td>${escapeHtml(side)}</td>
+        <td>${entryPrice}</td>
+        <td>${exitPrice}</td>
         <td class="${cls}"><strong>${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}</strong></td>
         <td class="${cls}">${roi}</td>
         <td>${escapeHtml(exitType)}</td>
@@ -155,7 +161,7 @@
       })
       .join("");
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="8">本会话暂无已平仓交易</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11">本会话暂无已平仓交易</td></tr>';
     }
   }
 
@@ -223,6 +229,18 @@
     } catch (e) {
       configMsg.textContent = String(e.message || e);
       configMsg.className = "message err";
+    }
+  });
+
+  document.getElementById("btn-reset")?.addEventListener("click", async () => {
+    if (!confirm("确定要删除所有历史交易数据并重新开始吗？此操作不可恢复！")) return;
+    try {
+      const r = await fetch("/api/reset", { method: "POST" });
+      const j = await r.json();
+      alert(j.message || "OK");
+      tick();
+    } catch (e) {
+      alert("重置失败: " + e);
     }
   });
 

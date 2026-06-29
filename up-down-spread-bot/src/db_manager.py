@@ -351,6 +351,19 @@ class DatabaseManager:
             self._local.conn.close()
             self._local.conn = None
 
+    # ── 重置 ───────────────────────────────────────────────────────
+
+    def clear_all_trades(self) -> int:
+        """清空所有交易、余额、余额变动记录。返回删除行数。"""
+        conn = self._get_conn()
+        cur = conn.cursor()
+        total = 0
+        for table in ("trades", "account_balance", "balance_changes"):
+            cur.execute(f"DELETE FROM {table}")
+            total += cur.rowcount
+        conn.commit()
+        return total
+
 
 # ---------------------------------------------------------------------------
 # 全局单例访问（模块级别，遵循现有模式）

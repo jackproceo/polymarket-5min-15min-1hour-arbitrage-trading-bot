@@ -170,12 +170,15 @@ def create_app(project_root: Path | None = None) -> Flask:
                     return {
                         "close_time": t.get("close_time", ""),
                         "market_slug": slug,
+                        "coin": t.get("coin", ""),
                         "side": t.get("side", "—"),
+                        "entry_price": t.get("entry_price"),
+                        "exit_price": t.get("exit_price"),
                         "pnl": round(float(t.get("pnl", 0)), 2),
                         "roi_display": round(t.get("roi_pct", 0), 2) if t.get("roi_pct") is not None else 0,
                         "exit_type": t.get("exit_type", "—"),
                         "winner": t.get("winner", ""),
-                        "polymarket_url": f"https://polymarket.com/event/{slug}" if slug else "",
+                        "polymarket_url": f"https://polymarket.com/zh/event/{slug}" if slug else "",
                     }
                 snap["recent_trades"] = [_t2r(t) for t in trades]
         except Exception:
@@ -225,6 +228,22 @@ def create_app(project_root: Path | None = None) -> Flask:
         wds.request_stop()
         return jsonify({"ok": True, "message": "已请求停止——机器人将优雅关闭。"})
 
+    @app.route("/api/reset", methods=["POST"])
+    def api_reset():
+        """删除所有历史交易、余额、余额变动记录，重新开始。"""
+        try:
+            import db_manager
+            db = db_manager.get_db()
+            if db is None:
+                return jsonify({"ok": False, "message": "数据库未初始化"}), 500
+            deleted = db.clear_all_trades()
+            return jsonify({
+                "ok": True,
+                "message": f"已清除所有历史数据（共 {deleted} 行），可以重新开始了。"
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "message": str(e)}), 500
+
     # ==================================================================
     # 数据页面路由
     # ==================================================================
@@ -264,7 +283,7 @@ def create_app(project_root: Path | None = None) -> Flask:
             for t in trades:
                 slug = t.get("market_slug", "")
                 if slug:
-                    t["polymarket_url"] = f"https://polymarket.com/event/{slug}"
+                    t["polymarket_url"] = f"https://polymarket.com/zh/event/{slug}"
                 t["pnl_display"] = round(t["pnl"], 2) if t.get("pnl") is not None else 0
                 t["roi_display"] = round(t["roi_pct"], 2) if t.get("roi_pct") is not None else 0
             return jsonify({"trades": trades, "total": total})

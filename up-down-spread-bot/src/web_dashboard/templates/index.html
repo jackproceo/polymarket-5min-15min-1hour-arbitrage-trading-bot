@@ -18,6 +18,7 @@
         <a href="/balance" class="btn btn-secondary">余额变动</a>
         <a href="/stats" class="btn btn-secondary">交易统计</a>
         <button type="button" id="btn-refresh" class="btn btn-secondary">立即刷新</button>
+        <button type="button" id="btn-reset" class="btn btn-danger">重新开始</button>
         <button type="button" id="btn-stop" class="btn btn-danger">请求停止</button>
       </div>
     </header>
@@ -39,8 +40,11 @@
           <thead>
             <tr>
               <th>平仓时间</th>
+              <th>货币</th>
               <th>市场</th>
               <th>方向</th>
+              <th>入场价</th>
+              <th>平仓价</th>
               <th>盈亏 ($)</th>
               <th>ROI (%)</th>
               <th>退出类型</th>
