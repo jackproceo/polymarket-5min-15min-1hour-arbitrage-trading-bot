@@ -288,34 +288,34 @@ _HTML_TABBED = r"""<!DOCTYPE html>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: linear-gradient(135deg, #0c0c1d 0%, #1a1a2e 50%, #16213e 100%);
-      --bg-secondary: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      --panel: rgba(30, 41, 59, 0.9);
-      --panel-glass: rgba(30, 41, 59, 0.7);
-      --panel-solid: #1e293b;
-      --border: rgba(71, 85, 105, 0.4);
-      --border-glow: rgba(59, 130, 246, 0.3);
-      --text-primary: #f8fafc;
-      --text-secondary: #cbd5e1;
-      --text-muted: #94a3b8;
-      --green: #22c55e;
-      --green-glow: rgba(34, 197, 94, 0.3);
-      --red: #ef4444;
-      --red-glow: rgba(239, 68, 68, 0.3);
-      --yellow: #eab308;
-      --yellow-glow: rgba(234, 179, 8, 0.3);
-      --blue: #3b82f6;
-      --blue-glow: rgba(59, 130, 246, 0.3);
-      --violet: #8b5cf6;
-      --cyan: #06b6d4;
+      --bg-primary: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+      --bg-secondary: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      --panel: rgba(255, 255, 255, 0.95);
+      --panel-glass: rgba(255, 255, 255, 0.85);
+      --panel-solid: #ffffff;
+      --border: rgba(203, 213, 225, 0.6);
+      --border-glow: rgba(59, 130, 246, 0.2);
+      --text-primary: #1e293b;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --green: #16a34a;
+      --green-glow: rgba(22, 163, 74, 0.1);
+      --red: #dc2626;
+      --red-glow: rgba(220, 38, 38, 0.1);
+      --yellow: #ca8a04;
+      --yellow-glow: rgba(202, 138, 4, 0.1);
+      --blue: #2563eb;
+      --blue-glow: rgba(37, 99, 235, 0.1);
+      --violet: #7c3aed;
+      --cyan: #0891b2;
       --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
       --success-gradient: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
       --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       --warning-gradient: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
       --btc-gradient: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
-      --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.4);
-      --shadow-md: 0 10px 20px rgba(0, 0, 0, 0.3);
-      --shadow-sm: 0 5px 15px rgba(0, 0, 0, 0.2);
+      --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.12);
+      --shadow-md: 0 10px 20px rgba(0, 0, 0, 0.1);
+      --shadow-sm: 0 5px 15px rgba(0, 0, 0, 0.08);
       --radius-lg: 16px;
       --radius-md: 12px;
       --radius-sm: 8px;
@@ -351,9 +351,9 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       width: 100%;
       height: 100%;
       background: 
-        radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.05) 0%, transparent 30%);
+        radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(6, 182, 212, 0.02) 0%, transparent 30%);
       z-index: -1;
       pointer-events: none;
     }
@@ -414,17 +414,16 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
     
     .status-badge {
-      background: rgba(22, 163, 74, 0.15);
-      color: #22c55e;
+      background: rgba(22, 163, 74, 0.1);
+      color: #16a34a;
       padding: 0.5rem 1rem;
       border-radius: 50px;
       font-size: 0.85rem;
       font-weight: 600;
-      border: 1px solid rgba(22, 163, 74, 0.3);
+      border: 1px solid rgba(22, 163, 74, 0.2);
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      backdrop-filter: blur(10px);
       position: relative;
       overflow: hidden;
       transition: var(--transition-fast);
@@ -447,9 +446,9 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
     
     .status-badge.offline {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      border-color: rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+      border-color: rgba(239, 68, 68, 0.2);
     }
 
     .status-badge.offline::before {
@@ -507,12 +506,11 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       display: flex;
       gap: 0.5rem;
       margin-bottom: 2rem;
-      background: rgba(15, 23, 42, 0.6);
+      background: rgba(248, 250, 252, 0.9);
       padding: 0.5rem;
       border-radius: var(--radius-lg);
       border: 1px solid var(--border);
-      backdrop-filter: blur(10px);
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--shadow-sm);
     }
     
     .tab {
@@ -564,6 +562,32 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       height: 3px;
     }
     
+    /* 选项卡内容样式 */
+    .tab-content {
+      display: none;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    
+    .tab-content.active {
+      display: block;
+      opacity: 1;
+      transform: translateY(0);
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
     /* 卡片样式 */
     .grid {
       display: grid;
@@ -572,7 +596,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
     
     .card {
-      background: var(--panel-glass);
+      background: var(--panel-solid);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 1.5rem;
@@ -580,7 +604,6 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       transition: var(--transition-normal);
       position: relative;
       overflow: hidden;
-      backdrop-filter: blur(10px);
     }
 
     .card::before {
@@ -594,7 +617,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
 
     .card:hover {
-      transform: translateY(-8px) scale(1.01);
+      transform: translateY(-5px);
       box-shadow: var(--shadow-lg);
       border-color: var(--border-glow);
     }
@@ -685,17 +708,16 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     
     /* 元信息样式 */
     .meta {
-      background: rgba(15, 23, 42, 0.7);
+      background: rgba(248, 250, 252, 0.9);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       padding: 1rem 1.5rem;
       margin-bottom: 2rem;
       font-size: 0.9rem;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      backdrop-filter: blur(10px);
       box-shadow: var(--shadow-sm);
       transition: var(--transition-fast);
     }
@@ -741,20 +763,21 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       overflow: hidden;
       box-shadow: var(--shadow-md);
       margin-top: 1rem;
+      border: 1px solid var(--border);
     }
     
     th, td {
       padding: 0.9rem 1.2rem;
       text-align: left;
-      border-bottom: 1px solid rgba(71, 85, 105, 0.4);
+      border-bottom: 1px solid var(--border);
     }
     
     th {
-      color: #cbd5e1;
+      color: var(--text-primary);
       font-weight: 700;
       font-size: 0.8rem;
       text-transform: uppercase;
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(248, 250, 252, 0.9);
       position: sticky;
       top: 0;
       z-index: 1;
@@ -763,7 +786,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
 
     th i {
       margin-right: 0.4rem;
-      color: var(--cyan);
+      color: var(--blue);
     }
     
     tr {
@@ -771,7 +794,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
 
     tr:hover {
-      background: rgba(59, 130, 246, 0.1);
+      background: rgba(59, 130, 246, 0.05);
     }
     
     tr:last-child td {
@@ -873,7 +896,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     /* 页脚 */
     footer {
       margin-top: 3rem;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       font-size: 0.85rem;
       text-align: center;
       padding-top: 1.5rem;
@@ -1092,18 +1115,18 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     }
 
     ::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.3);
+      background: rgba(203, 213, 225, 0.3);
       border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb {
-      background: rgba(71, 85, 105, 0.6);
+      background: rgba(100, 116, 139, 0.6);
       border-radius: 4px;
       transition: var(--transition-fast);
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: rgba(71, 85, 105, 0.8);
+      background: rgba(100, 116, 139, 0.8);
     }
 
     /* 数字动画 */
