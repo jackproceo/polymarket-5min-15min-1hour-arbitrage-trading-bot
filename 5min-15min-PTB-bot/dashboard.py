@@ -149,21 +149,6 @@ def api_db_stats():
     return jsonify(get_trade_stats())
 
 
-@app.route("/api/db/trades")
-def api_db_trades():
-    err = _require_pwd()
-    if err:
-        return err
-    try:
-        limit = request.args.get("limit", 100, type=int)
-        rows = get_recent_trades(limit)
-        return jsonify({"items": _safe_rows(rows)})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"items": [], "error": str(e)}), 500
-
-
 def _safe_row(row):
     """将 sqlite3.Row 安全转为可 JSON 序列化的 dict。"""
     if row is None:
@@ -184,6 +169,26 @@ def _safe_row(row):
 
 def _safe_rows(rows):
     return [_safe_row(r) for r in (rows or [])]
+
+
+@app.route("/api/db/trades")
+def api_db_trades():
+    err = _require_pwd()
+    if err:
+        return err
+    try:
+        raw = request.args.get("limit", "100")
+        limit = int(raw) if raw and str(raw).isdigit() else 100
+        conn = _get_conn()
+        rows = conn.execute(
+            "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return jsonify({"items": _safe_rows(rows)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"items": [], "error": str(e)}), 500
 
 
 @app.route("/api/db/account")

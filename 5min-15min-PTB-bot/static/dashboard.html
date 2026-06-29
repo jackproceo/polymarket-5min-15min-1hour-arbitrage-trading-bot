@@ -839,7 +839,11 @@ async function fetchDbTrades() {
   // 统一用 allTrades 作为首页和交易记录页的单一数据源
   try {
     const r = await authFetch("/api/db/trades?limit=200");
-    if (!r.ok) { console.error("fetchDbTrades http", r.status); return; }
+    if (!r.ok) {
+      const txt = await r.text().catch(()=>"");
+      console.error("fetchDbTrades http", r.status, txt);
+      return;
+    }
     const j = await r.json();
     if (j && j.items) {
       allTrades = j.items;
@@ -847,7 +851,7 @@ async function fetchDbTrades() {
       if (currentPage === "trades") renderTradeHistory();
       renderDbTrades();    // 首页交易记录表格也刷新
     } else {
-      console.warn("fetchDbTrades: empty items", j);
+      console.warn("fetchDbTrades: empty items, err=", j && j.error, j);
     }
   } catch(e) { console.error("fetchDbTrades err", e); }
 }
