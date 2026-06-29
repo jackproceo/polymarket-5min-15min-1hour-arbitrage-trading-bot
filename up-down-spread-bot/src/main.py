@@ -428,6 +428,55 @@ def main(args=None):
     multi_trader = MultiTrader(capital_per_strategy=0, strategy_names=strategy_names)
     multi_trader_instance = multi_trader  # 存储用于优雅关闭
     log.info("")
+
+    # 将内存中已平仓交易同步到 SQLite（确保 dashboard 可查询）
+    def _sync_closed_trades():
+        """遍历所有 trader 的 closed_trades，将缺失的交易写入 SQLite。"""
+        import db_manager as _dbm
+        _db = _dbm.get_db()
+        if _db is None:
+            return
+        synced = 0
+        for name, trader in multi_trader.traders.items():
+            for trade in getattr(trader, "closed_trades", []):
+                slug = trade.get("market_slug", "")
+                if not slug:
+                    continue
+                # 检查 SQLite 是否已有该市场记录
+                existing = _db.get_trades(limit=1, coin=getattr(trader, "coin", None))
+                if any(t.get("market_slug") == slug for t in existing):
+                    continue
+                total_cost = trade.get("total_cost", 0)
+                up_shares = trade.get("up_shares", 0)
+                down_shares = trade.get("down_shares", 0)
+                total_shares = up_shares + down_shares
+                entry_price = (total_cost / total_shares) if total_cost > 0 and total_shares > 0 else None
+                _db.save_trade({
+                    "market_slug": slug,
+                    "coin": getattr(trader, "coin", None),
+                    "side": trade.get("winner"),
+                    "entry_price": entry_price,
+                    "contracts": total_shares,
+                    "size_usd": total_cost,
+                    "pnl": trade.get("pnl", 0),
+                    "roi_pct": trade.get("roi_pct", 0),
+                    "winner": trade.get("winner"),
+                    "exit_type": trade.get("exit_reason", "market_resolution"),
+                    "exit_price": trade.get("exit_price"),
+                    "total_entries": trade.get("total_entries", 0),
+                    "up_invested": trade.get("up_invested", 0),
+                    "down_invested": trade.get("down_invested", 0),
+                    "up_shares": up_shares,
+                    "down_shares": down_shares,
+                    "duration_sec": trade.get("duration", 0),
+                    "close_time": trade.get("close_timestamp"),
+                    "status": "closed",
+                })
+                synced += 1
+        if synced:
+            log.info(f"[DB] Synced {synced} in-memory closed trades to SQLite")
+
+    _sync_closed_trades()
     
     # 初始化仪表盘（传入 config 用于交易状态显示）
     dashboard = DashboardMultiAB(width=160, coins=COINS, config=config)

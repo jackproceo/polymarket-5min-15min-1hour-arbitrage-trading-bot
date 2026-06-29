@@ -16,7 +16,7 @@ git add .
 # 或只添加特定文件：git add 文件名
 
 # 3. 提交
-git commit -m "描述改了什么"
+git commit -m "描述改了什么3"
 
 # 4. 推送到 GitHub
 git push
@@ -43,6 +43,10 @@ docker compose build
 
 docker compose build bot-vwap
 docker compose up -d --no-deps bot-vwap
+
+
+docker compose build bot-meridian
+docker compose up -d --no-deps bot-meridian
 
 
 # 4. 重建并重启容器（不中断的滚动更新）

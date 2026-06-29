@@ -53,6 +53,7 @@
   }
 
   function renderSummary(data) {
+    if (!summaryEl) return;
     const p = data.portfolio || {};
     const dry = data.dry_run;
     summaryEl.innerHTML = [
@@ -80,6 +81,7 @@
   }
 
   function renderCoins(data) {
+    if (!coinsEl) return;
     const coins = data.coins || {};
     const names = ["btc", "eth", "sol"];
     coinsEl.innerHTML = names
@@ -127,6 +129,7 @@
   }
 
   function renderRecent(data) {
+    if (!tbody) return;
     const rows = data.recent_trades || [];
     tbody.innerHTML = rows
       .map((t) => {
@@ -174,6 +177,7 @@
   }
 
   async function loadConfig() {
+    if (!configEditor || !configMsg) return;
     configMsg.textContent = "";
     configMsg.className = "message";
     try {
@@ -190,9 +194,10 @@
     }
   }
 
-  document.getElementById("btn-refresh").addEventListener("click", tick);
-  document.getElementById("btn-load-config").addEventListener("click", loadConfig);
-  document.getElementById("btn-save-config").addEventListener("click", async () => {
+  document.getElementById("btn-refresh")?.addEventListener("click", tick);
+  document.getElementById("btn-load-config")?.addEventListener("click", loadConfig);
+  document.getElementById("btn-save-config")?.addEventListener("click", async () => {
+    if (!configEditor || !configMsg) return;
     configMsg.textContent = "";
     try {
       const parsed = JSON.parse(configEditor.value);
@@ -211,7 +216,7 @@
     }
   });
 
-  document.getElementById("btn-stop").addEventListener("click", async () => {
+  document.getElementById("btn-stop")?.addEventListener("click", async () => {
     if (!confirm("请求正常停止？机器人将退出（等同于 Ctrl+C）。")) return;
     try {
       const r = await fetch("/api/bot/stop", { method: "POST" });

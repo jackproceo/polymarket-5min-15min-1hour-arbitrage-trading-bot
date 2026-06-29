@@ -129,14 +129,55 @@ def create_app(project_root: Path | None = None) -> Flask:
 
     @app.route("/api/status")
     def api_status():
-        """获取完整机器人状态快照（优先用内存快照，回退到文件快照）。"""
+        """获取完整机器人状态快照（以 SQLite 为交易数据源，内存数据用于实时盘口）。"""
         import web_dashboard_state as wds
 
         snap = wds.get_snapshot()
         if snap.get("status") == "initializing" or not snap.get("coins"):
             file_snap = wds.read_state_file(root)
             if file_snap:
-                return jsonify(file_snap)
+                snap = file_snap
+
+        # 以 SQLite 为交易统计数据源（覆盖 snapshot 中的内存数据）
+        try:
+            import db_manager
+            db = db_manager.get_db()
+            if db is not None:
+                stats = db.get_trade_stats()
+                by_coin = db.get_trade_stats_by_coin()
+                snap["portfolio"] = {
+                    "total_capital": snap.get("portfolio", {}).get("total_capital", 0),
+                    "total_pnl": round(stats.get("total_pnl", 0), 2),
+                    "portfolio_roi": round(stats.get("avg_roi", 0), 2),
+                    "total_trades": stats.get("count", 0),
+                }
+                # 按币种盈亏覆盖（来自 SQLite）
+                coins_block = snap.get("coins", {})
+                for row in by_coin:
+                    c = row.get("coin", "").lower()
+                    if c in coins_block:
+                        if coins_block[c].get("stats"):
+                            coins_block[c]["stats"]["pnl"] = row.get("total_pnl", 0)
+                            coins_block[c]["stats"]["total_trades"] = row.get("count", 0)
+                            coins_block[c]["stats"]["wins"] = row.get("wins", 0)
+                            coins_block[c]["stats"]["losses"] = row.get("losses", 0)
+                            coins_block[c]["stats"]["win_rate"] = row.get("win_rate", 0)
+
+                # 最近已平仓交易（来自 SQLite）
+                trades = db.get_trades(limit=12)
+                snap["recent_trades"] = [
+                    {
+                        "strategy": t.get("strategy") or "",
+                        "market_slug": t.get("market_slug", ""),
+                        "pnl": round(float(t.get("pnl", 0)), 2),
+                        "winner": t.get("winner", ""),
+                        "close_time": t.get("close_time", ""),
+                    }
+                    for t in trades
+                ]
+        except Exception:
+            pass  # SQLite 不可用时回退到内存数据
+
         return jsonify(snap)
 
     @app.route("/api/config", methods=["GET"])
