@@ -409,6 +409,24 @@ def get_chainlink_btc_price():
         return None
 
 
+# PTB API 请求指数退避（避免被 Polymarket 封 IP）
+_ptb_consecutive_fails = 0
+_ptb_next_retry_ts = 0.0
+_ptb_last_slug = None
+_PTB_BASE_BACKOFF = 60    # 首次失败后等 60s
+_PTB_MAX_BACKOFF = 900    # 最大等待 15 分钟
+_PTB_MAX_FAILS = 10       # 超过此次数彻底放弃当前窗口
+
+
+def reset_ptb_backoff(new_slug=None):
+    """窗口切换时重置 PTB 退避计数器。"""
+    global _ptb_consecutive_fails, _ptb_next_retry_ts, _ptb_last_slug
+    if new_slug is None or new_slug != _ptb_last_slug:
+        _ptb_consecutive_fails = 0
+        _ptb_next_retry_ts = 0.0
+        _ptb_last_slug = new_slug
+
+
 def get_crypto_price_api(start_time, end_time):
     """
     从 Polymarket crypto-price API 获取时间窗口的 PTB（Price To Beat）。
@@ -470,6 +488,14 @@ def get_crypto_price_api(start_time, end_time):
         }
 
         log(f"PTB 请求: {CRYPTO_PRICE_API}?{urlencode(params)}", "INFO")
+        # 指数退避：失败越多等待越久
+        if time.time() < _ptb_next_retry_ts:
+            wait = int(_ptb_next_retry_ts - time.time())
+            log(f"PTB 跳过（退避中，剩余 {wait}s，连续失败 {_ptb_consecutive_fails} 次）", "WARN")
+            return {}
+        if _ptb_consecutive_fails >= _PTB_MAX_FAILS:
+            log(f"PTB 已放弃当前窗口（连续失败 {_ptb_consecutive_fails} 次）", "ERR")
+            return {}
         r = requests.get(CRYPTO_PRICE_API, params=params, headers=headers,
                         proxies=PROXIES if PROXIES else None, timeout=10)
 
@@ -478,11 +504,22 @@ def get_crypto_price_api(start_time, end_time):
         if r.status_code == 200:
             data = r.json()
             log(f"PTB 返回数据: {data}", "INFO")
+            # 成功：重置退避
+            _ptb_consecutive_fails = 0
+            _ptb_next_retry_ts = 0.0
             return data
         else:
             log(f"PTB 请求失败: HTTP {r.status_code} - {r.text[:200]}", "ERR")
+            # 指数退避
+            _ptb_consecutive_fails += 1
+            delay = min(_PTB_MAX_BACKOFF, _PTB_BASE_BACKOFF * (2 ** (_ptb_consecutive_fails - 1)))
+            _ptb_next_retry_ts = time.time() + delay
+            log(f"PTB 退避 {delay}s（连续失败 {_ptb_consecutive_fails} 次）", "WARN")
     except Exception as e:
         log(f"价格数据错误: {type(e).__name__}: {str(e)}", "ERR")
+        _ptb_consecutive_fails += 1
+        delay = min(_PTB_MAX_BACKOFF, _PTB_BASE_BACKOFF * (2 ** (_ptb_consecutive_fails - 1)))
+        _ptb_next_retry_ts = time.time() + delay
     return {}
 
 

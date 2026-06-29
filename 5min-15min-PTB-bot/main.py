@@ -34,6 +34,7 @@ from utils import (
     _to_float, _maybe_float,
     _planned_take_profit_stop_loss, _emit_trading_analysis,
     _init_trading_analysis_session, _sync_dashboard_account_snapshot,
+    reset_ptb_backoff,
 )
 from state import _dashboard_set
 from websocket_feeds import MarketPriceListener
@@ -142,6 +143,7 @@ def main():
                 if remaining_live <= 0:
                     _clear_market_cache()
                     last_market_fetch = 0.0
+                    reset_ptb_backoff()
                 else:
                     market = dict(market_data_cache)
                     market["remaining"] = remaining_live
@@ -182,6 +184,7 @@ def main():
             remaining = market["remaining"]
 
             if last_slug and slug != last_slug:
+                reset_ptb_backoff(slug)
                 if market_listener:
                     market_listener.stop()
 
