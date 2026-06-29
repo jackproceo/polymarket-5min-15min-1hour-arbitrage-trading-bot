@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
+from utils.logging_setup import get_logger
+log = get_logger("db")
+
 
 # ---------------------------------------------------------------------------
 # DatabaseManager 类
@@ -33,7 +36,7 @@ class DatabaseManager:
         self._local = threading.local()
         self._init_db()
         # 使用纯 ASCII 以确保 Windows GBK 兼容
-        print(f"[DB] OK SQLite database initialized: {self.db_path}")
+        log.info(f"[DB] OK SQLite database initialized: {self.db_path}")
 
     # ── 连接（线程本地）──────────────────────────────────────
 
@@ -124,7 +127,24 @@ class DatabaseManager:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_bchg_ts       ON balance_changes(timestamp)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_bchg_type     ON balance_changes(operation_type)")
 
+        # 迁移：添加新列（如不存在）
+        self._migrate_schema(conn)
+
         conn.commit()
+
+    def _migrate_schema(self, conn):
+        """增量模式迁移：添加后续版本新增的列。"""
+        existing = [row[1] for row in conn.execute("PRAGMA table_info(trades)").fetchall()]
+        if "polymarket_order_id" not in existing:
+            try:
+                conn.execute("ALTER TABLE trades ADD COLUMN polymarket_order_id TEXT")
+            except Exception:
+                pass
+        if "open_time" not in existing:
+            try:
+                conn.execute("ALTER TABLE trades ADD COLUMN open_time TEXT")
+            except Exception:
+                pass
 
     # ── 辅助方法 ────────────────────────────────────────────────────────
 
@@ -175,6 +195,16 @@ class DatabaseManager:
         conn.commit()
         return cur.lastrowid
 
+    def count_trades(self, coin: str = None) -> int:
+        """返回交易记录总数（可按币种筛选）。"""
+        conn = self._get_conn()
+        cur = conn.cursor()
+        if coin:
+            cur.execute("SELECT COUNT(*) FROM trades WHERE coin=?", (coin,))
+        else:
+            cur.execute("SELECT COUNT(*) FROM trades")
+        return cur.fetchone()[0]
+
     def get_trades(self, limit: int = 100, offset: int = 0,
                    coin: str = None) -> List[Dict]:
         """查询交易记录，可按币种筛选，按平仓时间降序排列。"""
@@ -207,6 +237,29 @@ class DatabaseManager:
                 " SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) AS wins"
                 " FROM trades")
         return dict(cur.fetchone())
+
+    def get_trade_stats_by_coin(self) -> List[Dict]:
+        """按币种分组统计（SQL GROUP BY，不走 Python 聚合）。"""
+        conn = self._get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                COALESCE(coin, 'unknown') AS coin,
+                COUNT(*) AS count,
+                COALESCE(SUM(pnl),0) AS total_pnl,
+                SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) AS wins,
+                COUNT(*) - SUM(CASE WHEN pnl>0 THEN 1 ELSE 0 END) AS losses,
+                COALESCE(AVG(roi_pct),0) AS avg_roi
+            FROM trades
+            GROUP BY coin
+            ORDER BY total_pnl DESC
+        """)
+        rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            r["total_pnl"] = round(r["total_pnl"], 2)
+            r["avg_roi"] = round(r["avg_roi"], 2)
+            r["win_rate"] = round(r["wins"] / max(r["count"], 1) * 100, 1)
+        return rows
 
     # ====================================================================
     # 账户资金  (Account Balance)

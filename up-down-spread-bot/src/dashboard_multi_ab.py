@@ -5,6 +5,9 @@ import time
 from typing import Dict
 from multi_trader import MultiTrader
 
+from utils.logging_setup import get_logger
+log = get_logger("dashboard")
+
 
 class DashboardMultiAB:
     """多市场仪表盘——按策略分组"""

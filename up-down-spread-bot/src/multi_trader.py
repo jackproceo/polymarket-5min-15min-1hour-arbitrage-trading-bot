@@ -6,6 +6,9 @@ from typing import Dict, Optional
 from pathlib import Path
 from trader import Trader
 
+from utils.logging_setup import get_logger
+log = get_logger("multitrader")
+
 
 class MultiTrader:
     """管理多个独立交易策略"""
@@ -41,9 +44,9 @@ class MultiTrader:
             log_dir = project_root / "logs" / name
             log_dir.mkdir(parents=True, exist_ok=True)
             self.traders[name] = Trader(capital=capital_per_strategy, log_dir=str(log_dir), config=config)
-            print(f"[MULTI-TRADER] Initialized {name} with ${capital_per_strategy:,.0f}")
+            log.info(f"[MULTI-TRADER] Initialized {name} with ${capital_per_strategy:,.0f}")
         
-        print(f"[MULTI-TRADER] Total portfolio: ${len(self.traders) * capital_per_strategy:,.0f}")
+        log.info(f"[MULTI-TRADER] Total portfolio: ${len(self.traders) * capital_per_strategy:,.0f}")
     
     def enter_position(self, strategy_name: str, market_slug: str, side: str, 
                       price: float, contracts: int,
@@ -72,7 +75,7 @@ class MultiTrader:
             成功入场返回 True
         """
         if strategy_name not in self.traders:
-            print(f"[ERROR] Unknown strategy: {strategy_name}")
+            log.info(f"[ERROR] Unknown strategy: {strategy_name}")
             return False
         
         try:
@@ -91,7 +94,7 @@ class MultiTrader:
                 time_from_start=time_from_start
             )
         except Exception as e:
-            print(f"[ERROR] {strategy_name} entry failed: {e}")
+            log.info(f"[ERROR] {strategy_name} entry failed: {e}")
             return False
     
     def close_market(self, strategy_name: str, market_slug: str, 
@@ -110,7 +113,7 @@ class MultiTrader:
             交易结果字典或 None
         """
         if strategy_name not in self.traders:
-            print(f"[ERROR] Unknown strategy: {strategy_name}")
+            log.info(f"[ERROR] Unknown strategy: {strategy_name}")
             return None
         
         try:
@@ -122,7 +125,7 @@ class MultiTrader:
                 btc_final=btc_final
             )
         except Exception as e:
-            print(f"[ERROR] {strategy_name} close failed: {e}")
+            log.info(f"[ERROR] {strategy_name} close failed: {e}")
             return None
     
     def close_market_early_exit(self, strategy_name: str, market_slug: str, 
@@ -143,7 +146,7 @@ class MultiTrader:
             交易结果字典或 None
         """
         if strategy_name not in self.traders:
-            print(f"[ERROR] Unknown strategy: {strategy_name}")
+            log.info(f"[ERROR] Unknown strategy: {strategy_name}")
             return None
         
         try:
@@ -156,7 +159,7 @@ class MultiTrader:
                 down_bid=down_bid
             )
         except Exception as e:
-            print(f"[ERROR] {strategy_name} early exit failed: {e}")
+            log.info(f"[ERROR] {strategy_name} early exit failed: {e}")
             return None
     
     def get_trader(self, strategy_name: str) -> Optional[Trader]:

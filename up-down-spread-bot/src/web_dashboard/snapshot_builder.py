@@ -12,7 +12,7 @@ def build_snapshot(
     multi_trader,
     data_feed,
     wallet_balance: Optional[float],
-    config: Dict[str, Any],
+    config,
     session_start_time: float,
     dry_run: bool,
     markets_skipped: Dict[str, int],

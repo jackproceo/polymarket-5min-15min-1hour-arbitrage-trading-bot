@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
+from utils.logging_setup import get_logger
+log = get_logger("chart")
+
 def load_trades(log_dir: str, coins: List[str]) -> Dict[str, List[Dict]]:
     """从每个币种的 JSONL 文件加载所有交易"""
     all_trades = {}
@@ -21,9 +24,9 @@ def load_trades(log_dir: str, coins: List[str]) -> Dict[str, List[Dict]]:
         f.write(f"[CHART DEBUG] log_dir = {log_dir}\n")
         f.write(f"[CHART DEBUG] coins = {coins}\n")
     
-    print(f"[CHART DEBUG] load_trades 已调用")
-    print(f"[CHART DEBUG] log_dir = {log_dir}")
-    print(f"[CHART DEBUG] coins = {coins}")
+    log.info(f"[CHART DEBUG] load_trades 已调用")
+    log.info(f"[CHART DEBUG] log_dir = {log_dir}")
+    log.info(f"[CHART DEBUG] coins = {coins}")
     
     for coin in coins:
         trades_file = Path(log_dir) / f"late_v3_{coin}" / "trades.jsonl"
@@ -33,8 +36,8 @@ def load_trades(log_dir: str, coins: List[str]) -> Dict[str, List[Dict]]:
             f.write(f"[CHART DEBUG] 查找：{trades_file}\n")
             f.write(f"[CHART DEBUG] 文件存在：{trades_file.exists()}\n")
         
-        print(f"[CHART DEBUG] 查找：{trades_file}")
-        print(f"[CHART DEBUG] 文件存在：{trades_file.exists()}")
+        log.info(f"[CHART DEBUG] 查找：{trades_file}")
+        log.info(f"[CHART DEBUG] 文件存在：{trades_file.exists()}")
         
         if trades_file.exists():
             with open(trades_file, 'r') as f:
@@ -45,22 +48,22 @@ def load_trades(log_dir: str, coins: List[str]) -> Dict[str, List[Dict]]:
                     except Exception as e:
                         with open(debug_file, 'a') as df:
                             df.write(f"[CHART DEBUG] 解析行失败：{e}\n")
-                        print(f"[CHART DEBUG] 解析行失败：{e}")
+                        log.info(f"[CHART DEBUG] 解析行失败：{e}")
             
             with open(debug_file, 'a') as f:
                 f.write(f"[CHART DEBUG] 从 {coin} 加载了 {len(trades)} 笔交易\n")
-            print(f"[CHART DEBUG] 从 {coin} 加载了 {len(trades)} 笔交易")
+            log.info(f"[CHART DEBUG] 从 {coin} 加载了 {len(trades)} 笔交易")
         else:
             with open(debug_file, 'a') as f:
                 f.write(f"[CHART DEBUG] 未找到文件：{trades_file}\n")
-            print(f"[CHART DEBUG] 未找到文件：{trades_file}")
+            log.info(f"[CHART DEBUG] 未找到文件：{trades_file}")
         
         all_trades[coin] = trades
     
     total = sum(len(t) for t in all_trades.values())
     with open(debug_file, 'a') as f:
         f.write(f"[CHART DEBUG] 总加载交易数：{total}\n")
-    print(f"[CHART DEBUG] 总加载交易数：{total}")
+    log.info(f"[CHART DEBUG] 总加载交易数：{total}")
     
     return all_trades
 
@@ -84,7 +87,7 @@ def generate_pnl_chart(log_dir: str, coins: List[str], output_path: str) -> bool
         # 检查是否有任何交易
         total_trades = sum(len(trades) for trades in all_trades.values())
         if total_trades == 0:
-            print("[CHART] 未找到交易，跳过图表生成")
+            log.info("[CHART] 未找到交易，跳过图表生成")
             return False
         
         # 🔥 关键：去重！避免重复计算预估 + 实际盈亏
@@ -295,7 +298,7 @@ def generate_pnl_chart(log_dir: str, coins: List[str], output_path: str) -> bool
         with open(debug_file, 'a') as f:
             f.write(f"[CHART DEBUG] 图表保存成功！\n")
         
-        print(f"[CHART] ✓ 已生成盈亏图表：{output_path}")
+        log.info(f"[CHART] ✓ 已生成盈亏图表：{output_path}")
         return True
         
     except Exception as e:
@@ -306,7 +309,7 @@ def generate_pnl_chart(log_dir: str, coins: List[str], output_path: str) -> bool
             f.write(f"[CHART ERROR] 回溯：\n")
             f.write(traceback.format_exc())
         
-        print(f"[CHART] ✗ 生成图表时出错：{e}")
+        log.error(f"[CHART] ✗ 生成图表时出错：{e}")
         import traceback
         traceback.print_exc()
         return False

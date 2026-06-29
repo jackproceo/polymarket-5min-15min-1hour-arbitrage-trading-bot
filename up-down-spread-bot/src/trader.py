@@ -7,121 +7,84 @@ import threading
 from typing import Dict, List, Optional
 from pathlib import Path
 
-
-# 全局依赖（外部注入）
-_order_executor = None
-_data_feed = None  # ✅ 访问 position_tracker（真实数据！）
-_token_ids_cache = {}  # {market_slug: {'UP': token_id, 'DOWN': token_id}}
-_market_metadata_cache = {}  # {market_slug: {'condition_id': str, 'neg_risk': bool}}
-
-# 元数据的持久存储（重启后用于赎回，至关重要！）
-_METADATA_FILE = Path("logs/market_metadata.json")
-
-
-def set_order_executor(executor):
-    """注入 OrderExecutor 用于真实交易"""
-    global _order_executor
-    _order_executor = executor
-    print("[TRADER] ✓ OrderExecutor injected")
-
-
-def set_data_feed(data_feed):
-    """注入 DataFeed 以访问真实仓位"""
-    global _data_feed
-    _data_feed = data_feed
-    print("[TRADER] ✅ DataFeed injected (REAL position tracking)")
-
-
-def save_market_metadata_to_disk():
-    """
-    💾 将元数据保存到磁盘（重启后用于赎回，至关重要！）
-    
-    元数据包括：
-    - token_ids（UP、DOWN）
-    - condition_id（用于赎回）
-    - neg_risk 标志
-    
-    没有此功能，重启后无法赎回！
-    """
-    try:
-        _METADATA_FILE.parent.mkdir(exist_ok=True)
-        
-        # 将 token_ids 和元数据合并到一个字典
-        combined = {}
-        for market_slug in _token_ids_cache:
-            combined[market_slug] = {
-                'token_ids': _token_ids_cache[market_slug],
-                'metadata': _market_metadata_cache.get(market_slug, {})
-            }
-        
-        with open(_METADATA_FILE, 'w') as f:
-            json.dump(combined, f, indent=2)
-        
-        # print(f"[TRADER] 💾 Saved metadata for {len(combined)} markets to disk")
-    except Exception as e:
-        print(f"[TRADER] ⚠️ Failed to save metadata: {e}")
-
-
-def load_market_metadata_from_disk():
-    """
-    📂 在启动时从磁盘加载元数据
-    
-    这对于以下操作至关重要：
-    - 重启后赎回仓位
-    - EMERGENCY_SAVE 仓位（从 trades.jsonl 加载）
-    """
-    global _token_ids_cache, _market_metadata_cache
-    
-    if not _METADATA_FILE.exists():
-        print("[TRADER] ℹ️ No metadata file found (first run or clean start)")
-        return
-    
-    try:
-        with open(_METADATA_FILE, 'r') as f:
-            combined = json.load(f)
-        
-        # 恢复缓存
-        for market_slug, data in combined.items():
-            if 'token_ids' in data:
-                _token_ids_cache[market_slug] = data['token_ids']
-            if 'metadata' in data:
-                _market_metadata_cache[market_slug] = data['metadata']
-        
-        print(f"[TRADER] ✅ Loaded metadata for {len(combined)} markets from disk")
-    except Exception as e:
-        print(f"[TRADER] ⚠️ Failed to load metadata: {e}")
-
-
-def set_token_ids(market_slug: str, up_token_id: str, down_token_id: str, 
-                  condition_id: str = "", neg_risk: bool = True):
-    """缓存市场 token ID 和元数据，并保存到磁盘！"""
-    global _token_ids_cache, _market_metadata_cache
-    _token_ids_cache[market_slug] = {
-        'UP': up_token_id,
-        'DOWN': down_token_id
-    }
-    _market_metadata_cache[market_slug] = {
-        'condition_id': condition_id,
-        'neg_risk': neg_risk
-    }
-    
-    # 💾 至关重要：保存到磁盘，用于重启后赎回！
-    save_market_metadata_to_disk()
-
-
-def get_token_ids(market_slug: str) -> dict:
-    """获取市场的 token ID"""
-    return _token_ids_cache.get(market_slug, {})
-
-
-def get_market_metadata(market_slug: str) -> dict:
-    """获取市场元数据（condition_id、neg_risk）"""
-    return _market_metadata_cache.get(market_slug, {})
+from utils.logging_setup import get_logger
+log = get_logger("trader")
 
 
 class Trader:
     """管理交易仓位，支持详细的入场跟踪"""
     
+    # ── 类级别共享状态（替代模块级全局变量）──
+    order_executor = None
+    data_feed = None
+    token_ids_cache = {}
+    market_metadata_cache = {}
+    METADATA_FILE = Path("logs/market_metadata.json")
+
+    @classmethod
+    def set_order_executor(cls, executor):
+        """注入 OrderExecutor 用于真实交易"""
+        cls.order_executor = executor
+        log.info("[TRADER] ✓ OrderExecutor injected")
+
+    @classmethod
+    def set_data_feed(cls, data_feed):
+        """注入 DataFeed 以访问真实仓位"""
+        cls.data_feed = data_feed
+        log.info("[TRADER] ✅ DataFeed injected (REAL position tracking)")
+
+    @classmethod
+    def save_market_metadata_to_disk(cls):
+        """将元数据保存到磁盘（重启后用于赎回，至关重要！）"""
+        try:
+            cls.METADATA_FILE.parent.mkdir(exist_ok=True)
+            combined = {}
+            for market_slug in cls.token_ids_cache:
+                combined[market_slug] = {
+                    'token_ids': cls.token_ids_cache[market_slug],
+                    'metadata': cls.market_metadata_cache.get(market_slug, {})
+                }
+            with open(cls.METADATA_FILE, 'w') as f:
+                json.dump(combined, f, indent=2)
+        except Exception as e:
+            log.warning(f"[TRADER] ⚠️ Failed to save metadata: {e}")
+
+    @classmethod
+    def load_market_metadata_from_disk(cls):
+        """从磁盘加载元数据（重启后赎回用）"""
+        if not cls.METADATA_FILE.exists():
+            log.info("[TRADER] ℹ️ No metadata file found (first run or clean start)")
+            return
+        try:
+            with open(cls.METADATA_FILE, 'r') as f:
+                combined = json.load(f)
+            for market_slug, data in combined.items():
+                if 'token_ids' in data:
+                    cls.token_ids_cache[market_slug] = data['token_ids']
+                if 'metadata' in data:
+                    cls.market_metadata_cache[market_slug] = data['metadata']
+            log.info(f"[TRADER] ✅ Loaded metadata for {len(combined)} markets from disk")
+        except Exception as e:
+            log.warning(f"[TRADER] ⚠️ Failed to load metadata: {e}")
+
+    @classmethod
+    def set_token_ids(cls, market_slug: str, up_token_id: str, down_token_id: str,
+                      condition_id: str = "", neg_risk: bool = True):
+        """缓存市场 token ID 和元数据，并保存到磁盘！"""
+        cls.token_ids_cache[market_slug] = {'UP': up_token_id, 'DOWN': down_token_id}
+        cls.market_metadata_cache[market_slug] = {'condition_id': condition_id, 'neg_risk': neg_risk}
+        cls.save_market_metadata_to_disk()
+
+    @classmethod
+    def get_token_ids(cls, market_slug: str) -> dict:
+        """获取市场的 token ID"""
+        return cls.token_ids_cache.get(market_slug, {})
+
+    @classmethod
+    def get_market_metadata(cls, market_slug: str) -> dict:
+        """获取市场元数据（condition_id、neg_risk）"""
+        return cls.market_metadata_cache.get(market_slug, {})
+
     def __init__(self, capital: float, log_dir: str = "logs", config: dict = None):
         self.starting_capital = capital
         self.current_capital = capital
@@ -150,7 +113,7 @@ class Trader:
         self.trades_file = self.log_dir / "trades.jsonl"
         self.session_file = self.log_dir / "session.json"
         
-        print(f"[TRADER] Initialized with ${capital:,.2f} capital")
+        log.info(f"[TRADER] Initialized with ${capital:,.2f} capital")
         
         # 加载以往交易以恢复统计
         self.load_previous_trades()
@@ -161,7 +124,7 @@ class Trader:
         允许机器人在重启后从中断处继续运行
         """
         if not self.trades_file.exists():
-            print(f"[TRADER] No previous trades file found (this is OK for first run)")
+            log.info(f"[TRADER] No previous trades file found (this is OK for first run)")
             return
         
         try:
@@ -179,7 +142,7 @@ class Trader:
                         
                         # 验证交易是否包含必填字段
                         if 'pnl' not in trade or 'market_slug' not in trade:
-                            print(f"[WARNING] Trade on line {line_num} missing required fields, skipping")
+                            log.warning(f"[WARNING] Trade on line {line_num} missing required fields, skipping")
                             corrupted_lines += 1
                             continue
                         
@@ -187,7 +150,7 @@ class Trader:
                         loaded_count += 1
                         
                     except json.JSONDecodeError as e:
-                        print(f"[WARNING] Corrupted JSON on line {line_num}: {e}")
+                        log.warning(f"[WARNING] Corrupted JSON on line {line_num}: {e}")
                         corrupted_lines += 1
                         continue
             
@@ -200,19 +163,19 @@ class Trader:
                 wins = sum(1 for t in self.closed_trades if t['pnl'] > 0)
                 win_rate = (wins / loaded_count * 100) if loaded_count > 0 else 0
                 
-                print(f"[TRADER] ✓ Loaded {loaded_count} previous trade(s)")
-                print(f"[TRADER]   Cumulative PnL: ${total_pnl:+,.2f}")
-                print(f"[TRADER]   Win Rate: {win_rate:.1f}% ({wins}/{loaded_count})")
-                print(f"[TRADER]   Current Capital: ${self.current_capital:,.2f}")
+                log.info(f"[TRADER] ✓ Loaded {loaded_count} previous trade(s)")
+                log.info(f"[TRADER]   Cumulative PnL: ${total_pnl:+,.2f}")
+                log.info(f"[TRADER]   Win Rate: {win_rate:.1f}% ({wins}/{loaded_count})")
+                log.info(f"[TRADER]   Current Capital: ${self.current_capital:,.2f}")
                 
                 if corrupted_lines > 0:
-                    print(f"[TRADER] ⚠ Skipped {corrupted_lines} corrupted line(s)")
+                    log.warning(f"[TRADER] ⚠ Skipped {corrupted_lines} corrupted line(s)")
             else:
-                print(f"[TRADER] No valid trades found in file")
+                log.info(f"[TRADER] No valid trades found in file")
                 
         except Exception as e:
-            print(f"[TRADER] ⚠ Error loading previous trades: {e}")
-            print(f"[TRADER] Starting fresh with capital ${self.starting_capital:,.2f}")
+            log.warning(f"[TRADER] ⚠ Error loading previous trades: {e}")
+            log.info(f"[TRADER] Starting fresh with capital ${self.starting_capital:,.2f}")
             # 出错时重置为全新状态
             self.closed_trades = []
             self.current_capital = self.starting_capital
@@ -262,14 +225,14 @@ class Trader:
         actual_contracts = shares
         actual_cost = size_usd
         
-        if _order_executor and market_slug in _token_ids_cache:
-            token_id = _token_ids_cache[market_slug][side]
+        if Trader.order_executor and market_slug in Trader.token_ids_cache:
+            token_id = Trader.token_ids_cache[market_slug][side]
             ask_price = up_ask if side == 'UP' else down_ask
             
             if token_id and ask_price:
-                print(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} contracts = ${size_usd:6.2f}  ({market_slug})")
+                log.info(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} contracts = ${size_usd:6.2f}  ({market_slug})")
                 
-                result = _order_executor.place_buy_order(
+                result = Trader.order_executor.place_buy_order(
                     market_slug=market_slug,
                     token_id=token_id,
                     side=side,
@@ -283,17 +246,17 @@ class Trader:
                     actual_cost = result.total_spent_usd
                     
                     if actual_contracts != contracts:
-                        print(f"[TRADER] ⚠ FAK partial fill: {actual_contracts:.2f}/{contracts} contracts")
+                        log.warning(f"[TRADER] ⚠ FAK partial fill: {actual_contracts:.2f}/{contracts} contracts")
                     
-                    print(f"[TRADER] ✓ Order filled: {actual_contracts:.2f} contracts for ${actual_cost:.2f}")
+                    log.info(f"[TRADER] ✓ Order filled: {actual_contracts:.2f} contracts for ${actual_cost:.2f}")
                     
                 elif not result.dry_run:
                     # ❌ 失败！不要创建仓位！
-                    print(f"[TRADER] ❌ Order FAILED for {side}: {result.error} - position NOT created")
+                    log.error(f"[TRADER] ❌ Order FAILED for {side}: {result.error} - position NOT created")
                     return False
         else:
             # DRY_RUN 或无执行器 - 仅打印
-            print(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} shares = ${size_usd:6.2f}  ({market_slug})")
+            log.info(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} shares = ${size_usd:6.2f}  ({market_slug})")
         
         # 现在使用实际值（或 DRY_RUN 下的模拟值）创建仓位
         if market_slug not in self.positions:
@@ -321,7 +284,7 @@ class Trader:
             'shares': actual_contracts,
             'time': time.time(),
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-            'actual_fill': (_order_executor is not None)  # 标记是否为真实订单
+            'actual_fill': (Trader.order_executor is not None)  # 标记是否为真实订单
         }
         
         # 添加到仓位
@@ -352,7 +315,7 @@ class Trader:
                 )
             except Exception as e:
                 # 日志记录失败时不要影响交易
-                print(f"[WARNING] Detailed logging failed: {e}")
+                log.warning(f"[WARNING] Detailed logging failed: {e}")
         
         return True
     
@@ -419,9 +382,9 @@ class Trader:
         if total_shares > 0 and self._entry_count % 5 == 1:
             up_ratio = (up_shares / total_shares) * 100
             down_ratio = (down_shares / total_shares) * 100
-            print(f"[TRADER] After entry: UP {up_shares:.1f} ({up_ratio:.1f}%) | DOWN {down_shares:.1f} ({down_ratio:.1f}%)")
+            log.info(f"[TRADER] After entry: UP {up_shares:.1f} ({up_ratio:.1f}%) | DOWN {down_shares:.1f} ({down_ratio:.1f}%)")
         
-        print(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} shares = ${size_usd:6.2f}  ({market_slug})")
+        log.info(f"[TRADER] ▶ {side:4s} @ ${price:.3f}  {shares:6.1f} shares = ${size_usd:6.2f}  ({market_slug})")
         
         return True
     
@@ -514,14 +477,13 @@ class Trader:
         except Exception as e:
             # 关键：如果日志记录失败，不要删除仓位！
             # 仓位将保持打开状态，可以再次关闭
-            print(f"[TRADER] ⚠️ FAILED TO CLOSE MARKET {market_slug}: {e}")
-            print(f"[TRADER] ⚠️ Position kept open for retry!")
+            log.warning(f"[TRADER] ⚠️ FAILED TO CLOSE MARKET {market_slug}: {e}")
+            log.warning(f"[TRADER] ⚠️ Position kept open for retry!")
             return None
         
         # 打印结果
         status = "✓" if pnl > 0 else "✗"
-        print(f"[TRADER] {status} CLOSED {market_slug}: {pnl:+.2f} ({roi_pct:+.1f}%) | "
-              f"{trade['total_entries']} entries, ${total_cost:.0f} invested, {winner_ratio:.1f}% {winner}")
+        log.info(f"[TRADER] {status} CLOSED {market_slug}: {pnl:+.2f} ({roi_pct:+.1f}%) | " f"{trade['total_entries']} entries, ${total_cost:.0f} invested, {winner_ratio:.1f}% {winner}")
         
         # ═══════════════════════════════════════════════════════════
         # 🔥 关键：重置该市场的投资跟踪！
@@ -531,7 +493,7 @@ class Trader:
             if order_executor and hasattr(order_executor, 'safety'):
                 order_executor.safety.reset_market(market_slug)
         except Exception as reset_err:
-            print(f"[TRADER] ⚠ Failed to reset market tracking: {reset_err}")
+            log.warning(f"[TRADER] ⚠ Failed to reset market tracking: {reset_err}")
         
         return trade
     
@@ -598,8 +560,8 @@ class Trader:
                     # 从 data_feed 获取当前卖单价
                     up_ask = 0.5
                     down_ask = 0.5
-                    if _data_feed:
-                        market_state = _data_feed.get_state(self.coin)
+                    if Trader.data_feed:
+                        market_state = Trader.data_feed.get_state(self.coin)
                         up_ask = market_state.get('up_ask', 0.5)
                         down_ask = market_state.get('down_ask', 0.5)
                     
@@ -611,7 +573,7 @@ class Trader:
                     )
                     self._log_exit_orderbook(self._last_orderbook_snapshot)
                 except Exception as e:
-                    print(f"[TRADER] ⚠ Failed to log orderbook: {e}")
+                    log.warning(f"[TRADER] ⚠ Failed to log orderbook: {e}")
                     self._last_orderbook_snapshot = None
             
             # 创建交易记录
@@ -665,22 +627,21 @@ class Trader:
             except Exception as e:
                 # 关键：如果日志记录失败，不要删除仓位！
                 # 仓位将保持打开状态，可以再次关闭
-                print(f"[TRADER] ⚠️ FAILED TO CLOSE MARKET {market_slug}: {e}")
-                print(f"[TRADER] ⚠️ Position kept open for retry!")
+                log.warning(f"[TRADER] ⚠️ FAILED TO CLOSE MARKET {market_slug}: {e}")
+                log.warning(f"[TRADER] ⚠️ Position kept open for retry!")
                 return None
             
             # 打印结果
             status = "🚨" if pnl < 0 else "✓"
-            print(f"[TRADER] {status} EARLY EXIT {market_slug} @ ${exit_price:.2f}: {pnl:+.2f} ({roi_pct:+.1f}%) | "
-                  f"{trade['total_entries']} entries, ${total_cost:.0f} invested")
+            log.info(f"[TRADER] {status} EARLY EXIT {market_slug} @ ${exit_price:.2f}: {pnl:+.2f} ({roi_pct:+.1f}%) | " f"{trade['total_entries']} entries, ${total_cost:.0f} invested")
             
             # 🔥 实盘卖出（如果已连接执行器）
             # 📊 收集实际收益，用于精确的盈亏计算
             real_payout = 0.0
             real_sells_executed = False
             
-            if _order_executor and market_slug in _token_ids_cache:
-                token_ids = _token_ids_cache[market_slug]
+            if Trader.order_executor and market_slug in Trader.token_ids_cache:
+                token_ids = Trader.token_ids_cache[market_slug]
                 
                 # 使用跟踪的合约数量卖出两侧（UP 和 DOWN）
                 for side in ['UP', 'DOWN']:
@@ -698,7 +659,7 @@ class Trader:
                         # 回退方案
                         bid = exit_price if side == 'UP' else (1 - exit_price)
                     
-                    result = _order_executor.sell_position(
+                    result = Trader.order_executor.sell_position(
                         market_slug=market_slug,
                         token_id=token_id,
                         side=side,
@@ -711,7 +672,7 @@ class Trader:
                         real_payout += result.total_spent_usd
                         real_sells_executed = True
                     elif not result.dry_run:
-                        print(f"[TRADER] ⚠ Failed to sell {side}: {result.error}")
+                        log.warning(f"[TRADER] ⚠ Failed to sell {side}: {result.error}")
                 
                 # ═══════════════════════════════════════════════════════════
                 # 📊 滑点分析：预期 vs 实际
@@ -733,29 +694,29 @@ class Trader:
                             price_diff = actual_avg_price - expected_price
                             price_diff_pct = (price_diff / expected_price * 100) if expected_price > 0 else 0
                             
-                            print(f"\n{'='*80}")
-                            print(f"[SLIPPAGE ANALYSIS] {self.coin.upper()} - {exit_reason}")
-                            print(f"{'='*80}")
-                            print(f"📊 EXPECTED (based on BID at trigger):")
-                            print(f"   Best BID price: ${expected_price:.4f}")
-                            print(f"   Expected payout: ${expected_payout:.2f}")
-                            print(f"   Expected PnL: ${pnl:.2f}")
-                            print(f"")
-                            print(f"💰 ACTUAL (from API response):")
-                            print(f"   Avg fill price: ${actual_avg_price:.4f}")
-                            print(f"   Actual payout: ${real_payout:.2f}")
-                            print(f"   Actual PnL: ${real_pnl:.2f}")
-                            print(f"")
-                            print(f"📉 SLIPPAGE:")
-                            print(f"   Payout difference: ${slippage_usd:+.2f} ({slippage_pct:+.1f}%)")
-                            print(f"   Price difference: ${price_diff:+.4f} ({price_diff_pct:+.1f}%)")
+                            log.info(f"\n{'='*80}")
+                            log.info(f"[SLIPPAGE ANALYSIS] {self.coin.upper()} - {exit_reason}")
+                            log.info(f"{'='*80}")
+                            log.info(f"📊 EXPECTED (based on BID at trigger):")
+                            log.info(f"   Best BID price: ${expected_price:.4f}")
+                            log.info(f"   Expected payout: ${expected_payout:.2f}")
+                            log.info(f"   Expected PnL: ${pnl:.2f}")
+                            log.info(f"")
+                            log.info(f"💰 ACTUAL (from API response):")
+                            log.info(f"   Avg fill price: ${actual_avg_price:.4f}")
+                            log.info(f"   Actual payout: ${real_payout:.2f}")
+                            log.info(f"   Actual PnL: ${real_pnl:.2f}")
+                            log.info(f"")
+                            log.info(f"📉 SLIPPAGE:")
+                            log.info(f"   Payout difference: ${slippage_usd:+.2f} ({slippage_pct:+.1f}%)")
+                            log.info(f"   Price difference: ${price_diff:+.4f} ({price_diff_pct:+.1f}%)")
                             
                             if slippage_usd < -1.0:
-                                print(f"   ⚠️ NEGATIVE SLIPPAGE > $1 - investigating...")
+                                log.warning(f"   ⚠️ NEGATIVE SLIPPAGE > $1 - investigating...")
                             elif abs(slippage_usd) < 0.5:
-                                print(f"   ✅ Minimal slippage")
+                                log.info(f"   ✅ Minimal slippage")
                             
-                            print(f"{'='*80}\n")
+                            log.info(f"{'='*80}\n")
                             
                             # 添加到快照用于日志记录
                             snapshot['actual_sale'] = {
@@ -772,7 +733,7 @@ class Trader:
                             self._log_exit_orderbook(snapshot)
                             
                     except Exception as e:
-                        print(f"[TRADER] ⚠ Slippage analysis error: {e}")
+                        log.warning(f"[TRADER] ⚠ Slippage analysis error: {e}")
                 
                 # ═══════════════════════════════════════════════════════════
                 # 📊 用实际数据更新交易记录
@@ -806,10 +767,10 @@ class Trader:
                     # 用实际盈亏更新资金（而非估算值）
                     self.current_capital = self.current_capital - pnl + real_pnl
                     
-                    print(f"[TRADER] 💰 Real payout: ${real_payout:.2f} (estimated: ${payout:.2f})")
+                    log.info(f"[TRADER] 💰 Real payout: ${real_payout:.2f} (estimated: ${payout:.2f})")
                     if abs(real_pnl - pnl) > 0.5:
                         diff = real_pnl - pnl
-                        print(f"[TRADER] ⚠️  PnL correction: {diff:+.2f} (real: {real_pnl:+.2f} vs estimated: {pnl:+.2f})")
+                        log.warning(f"[TRADER] ⚠️  PnL correction: {diff:+.2f} (real: {real_pnl:+.2f} vs estimated: {pnl:+.2f})")
             
             # ═══════════════════════════════════════════════════════════
             # 🔥 关键：重置该市场的投资跟踪！
@@ -819,7 +780,7 @@ class Trader:
                 if order_executor and hasattr(order_executor, 'safety'):
                     order_executor.safety.reset_market(market_slug)
             except Exception as reset_err:
-                print(f"[TRADER] ⚠ Failed to reset market tracking: {reset_err}")
+                log.warning(f"[TRADER] ⚠ Failed to reset market tracking: {reset_err}")
             
             return trade
     
@@ -857,8 +818,8 @@ class Trader:
         up_asks_full = []
         down_asks_full = []
         
-        if _data_feed:
-            market_state = _data_feed.get_state(self.coin)
+        if Trader.data_feed:
+            market_state = Trader.data_feed.get_state(self.coin)
             up_bids_full = market_state.get('up_bids_full', [])
             down_bids_full = market_state.get('down_bids_full', [])
             up_asks_full = market_state.get('up_asks_full', [])
@@ -919,30 +880,30 @@ class Trader:
             f.write(json.dumps(snapshot) + '\n')
         
         # 打印摘要到控制台
-        print(f"\n{'='*80}")
-        print(f"[EXIT ORDERBOOK] {snapshot['coin'].upper()} - {snapshot['exit_reason']}")
-        print(f"Market: {snapshot['market_slug']}")
-        print(f"Our side: {snapshot['position']['our_side']}")
-        print(f"Invested: ${snapshot['position']['total_invested']:.2f}")
-        print(f"Best bid (sell price): {snapshot['expected_sale']['best_bid_price']:.4f}")
-        print(f"Expected payout: ${snapshot['expected_sale']['expected_payout_usd']:.2f}")
-        print(f"Expected loss: ${snapshot['expected_sale']['expected_loss_usd']:.2f}")
-        print(f"UP: BID={snapshot['orderbook']['UP']['best_bid']:.4f} ASK={snapshot['orderbook']['UP']['best_ask']:.4f} SPREAD={snapshot['orderbook']['UP']['spread']:.4f}")
-        print(f"DOWN: BID={snapshot['orderbook']['DOWN']['best_bid']:.4f} ASK={snapshot['orderbook']['DOWN']['best_ask']:.4f} SPREAD={snapshot['orderbook']['DOWN']['spread']:.4f}")
+        log.info(f"\n{'='*80}")
+        log.info(f"[EXIT ORDERBOOK] {snapshot['coin'].upper()} - {snapshot['exit_reason']}")
+        log.info(f"Market: {snapshot['market_slug']}")
+        log.info(f"Our side: {snapshot['position']['our_side']}")
+        log.info(f"Invested: ${snapshot['position']['total_invested']:.2f}")
+        log.info(f"Best bid (sell price): {snapshot['expected_sale']['best_bid_price']:.4f}")
+        log.info(f"Expected payout: ${snapshot['expected_sale']['expected_payout_usd']:.2f}")
+        log.info(f"Expected loss: ${snapshot['expected_sale']['expected_loss_usd']:.2f}")
+        log.info(f"UP: BID={snapshot['orderbook']['UP']['best_bid']:.4f} ASK={snapshot['orderbook']['UP']['best_ask']:.4f} SPREAD={snapshot['orderbook']['UP']['spread']:.4f}")
+        log.info(f"DOWN: BID={snapshot['orderbook']['DOWN']['best_bid']:.4f} ASK={snapshot['orderbook']['DOWN']['best_ask']:.4f} SPREAD={snapshot['orderbook']['DOWN']['spread']:.4f}")
         
         # 打印卖出侧的完整订单簿
         our_side = snapshot['position']['our_side']
         if our_side:
-            print(f"\n{our_side} Orderbook (we're selling here):")
+            log.info(f"\n{our_side} Orderbook (we're selling here):")
             ob = snapshot['orderbook'][our_side]
-            print(f"  Asks (top 1):")
+            log.info(f"  Asks (top 1):")
             for level in ob['asks_top1']:
-                print(f"    ${level['price']:.4f} × {level['size']:.2f}")
-            print(f"  Bids (top 5):")
+                log.info(f"    ${level['price']:.4f} × {level['size']:.2f}")
+            log.info(f"  Bids (top 5):")
             for level in ob['bids_top5']:
-                print(f"    ${level['price']:.4f} × {level['size']:.2f}")
+                log.info(f"    ${level['price']:.4f} × {level['size']:.2f}")
         
-        print(f"{'='*80}\n")
+        log.info(f"{'='*80}\n")
     
     def get_market_stats(self, market_slug: str, up_current: float = 0.5, down_current: float = 0.5) -> Optional[Dict]:
         """
@@ -1130,11 +1091,11 @@ class Trader:
             # 检查我们的方向价格是否跌得太低
             if our_price <= flip_stop_price:
                 flip_stop_triggered = True
-                print(f"[FLIP-STOP] 🚨 {coin.upper()} {our_side} @ ${our_price:.4f} <= ${flip_stop_price:.4f} TRIGGERED!")
+                log.error(f"[FLIP-STOP] 🚨 {coin.upper()} {our_side} @ ${our_price:.4f} <= ${flip_stop_price:.4f} TRIGGERED!")
             else:
                 # 如果价格接近翻转止损（25% 以内），记录警告
                 if our_price < flip_stop_price * 1.25:
-                    print(f"[FLIP-STOP] ⚠️  {coin.upper()} {our_side} @ ${our_price:.4f} close to ${flip_stop_price:.4f}")
+                    log.warning(f"[FLIP-STOP] ⚠️  {coin.upper()} {our_side} @ ${our_price:.4f} close to ${flip_stop_price:.4f}")
         
         # 用当前未实现盈亏更新回撤
         self.update_market_drawdown(market_slug, unrealized_pnl)
@@ -1187,20 +1148,20 @@ class Trader:
                 f.flush()  # 立即强制写入磁盘
                 
         except PermissionError as e:
-            print(f"[TRADER] ⚠️ PERMISSION ERROR logging trade: {e}")
-            print(f"[TRADER] ⚠️ Trade data: {trade}")
-            print(f"[TRADER] ⚠️ File: {self.trades_file}")
+            log.warning(f"[TRADER] ⚠️ PERMISSION ERROR logging trade: {e}")
+            log.warning(f"[TRADER] ⚠️ Trade data: {trade}")
+            log.warning(f"[TRADER] ⚠️ File: {self.trades_file}")
             raise  # 重新抛出，防止删除仓位
             
         except OSError as e:
-            print(f"[TRADER] ⚠️ DISK ERROR logging trade: {e}")
-            print(f"[TRADER] ⚠️ Trade data: {trade}")
-            print(f"[TRADER] ⚠️ Check disk space: df -h")
+            log.warning(f"[TRADER] ⚠️ DISK ERROR logging trade: {e}")
+            log.warning(f"[TRADER] ⚠️ Trade data: {trade}")
+            log.warning(f"[TRADER] ⚠️ Check disk space: df -h")
             raise  # 重新抛出，防止删除仓位
             
         except Exception as e:
-            print(f"[TRADER] ⚠️ UNKNOWN ERROR logging trade: {e}")
-            print(f"[TRADER] ⚠️ Trade data: {trade}")
+            log.warning(f"[TRADER] ⚠️ UNKNOWN ERROR logging trade: {e}")
+            log.warning(f"[TRADER] ⚠️ Trade data: {trade}")
             import traceback
             traceback.print_exc()
             raise  # 重新抛出，防止删除仓位
@@ -1213,14 +1174,15 @@ class Trader:
             down_shares = trade.get('down_shares', 0)
             total_shares = up_shares + down_shares
             entry_price = (total_cost / total_shares) if total_cost > 0 and total_shares > 0 else None
+            pnl_val = trade.get('pnl', 0) or 0
             db_manager.get_db().save_trade({
                 'market_slug': trade.get('market_slug', ''),
-                'coin': None,  # 从策略上下文中派生（如有需要）
+                'coin': getattr(self, 'coin', None),
                 'side': trade.get('winner'),
                 'entry_price': entry_price,
                 'contracts': total_shares,
                 'size_usd': total_cost,
-                'pnl': trade.get('pnl', 0),
+                'pnl': pnl_val,
                 'roi_pct': trade.get('roi_pct', 0),
                 'winner': trade.get('winner'),
                 'exit_type': trade.get('exit_reason', 'market_resolution'),
@@ -1234,6 +1196,20 @@ class Trader:
                 'close_time': trade.get('close_timestamp'),
                 'status': 'closed',
             })
+            # 同时记录模拟余额变动（实盘/模拟均记录）
+            try:
+                old_capital = self.current_capital - pnl_val
+                db_manager.get_db().save_balance_change(
+                    amount=pnl_val,
+                    balance_before=old_capital,
+                    balance_after=self.current_capital,
+                    operation_type='trade',
+                    market_slug=trade.get('market_slug', ''),
+                    coin=getattr(self, 'coin', None),
+                    note=f"Trade close: {trade.get('winner', '?')} PnL={pnl_val:+.2f}"
+                )
+            except Exception:
+                pass
         except Exception:
             pass  # 数据库日志记录失败不应影响交易流程
     
@@ -1254,7 +1230,7 @@ class Trader:
                 json.dump(session, f, indent=2)
                 
         except Exception as e:
-            print(f"[TRADER] Error saving session: {e}")
+            log.info(f"[TRADER] Error saving session: {e}")
     
     def log_entry_detailed(self, market_slug: str, side: str, contracts: int, 
                            price: float, up_ask: float, down_ask: float,
@@ -1373,5 +1349,29 @@ class Trader:
         # 追加入场记录
         with open(filepath, 'a') as f:
             f.write(json.dumps(entry_data) + '\n')
+
+
+# ── 向后兼容的模块级函数（委托给 Trader 类方法）──
+
+def set_order_executor(executor):
+    return Trader.set_order_executor(executor)
+
+def set_data_feed(data_feed):
+    return Trader.set_data_feed(data_feed)
+
+def save_market_metadata_to_disk():
+    return Trader.save_market_metadata_to_disk()
+
+def load_market_metadata_from_disk():
+    return Trader.load_market_metadata_from_disk()
+
+def set_token_ids(market_slug, up_token_id, down_token_id, condition_id="", neg_risk=True):
+    return Trader.set_token_ids(market_slug, up_token_id, down_token_id, condition_id, neg_risk)
+
+def get_token_ids(market_slug):
+    return Trader.get_token_ids(market_slug)
+
+def get_market_metadata(market_slug):
+    return Trader.get_market_metadata(market_slug)
 
 

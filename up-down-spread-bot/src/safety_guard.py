@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 from typing import Dict, Tuple
 
+from utils.logging_setup import get_logger
+log = get_logger("safety")
+
 
 class SafetyGuard:
     """防止意外真实资金交易"""
@@ -55,7 +58,7 @@ class SafetyGuard:
         with open(self.safety_log, 'a', encoding='utf-8') as f:
             f.write(msg)
         
-        print(msg)
+        log.info(msg)
     
     def check_order_allowed(self, side: str, contracts: int, price: float, 
                            market_slug: str) -> Tuple[bool, str]:
@@ -130,7 +133,7 @@ class SafetyGuard:
         if market_slug in self.invested_per_market:
             invested_amount = self.invested_per_market[market_slug]
             del self.invested_per_market[market_slug]
-            print(f"[SAFETY] ♻️ Investment tracking reset for {market_slug} (was ${invested_amount:.2f})")
+            log.info(f"[SAFETY] ♻️ Investment tracking reset for {market_slug} (was ${invested_amount:.2f})")
             
             # 写入日志
             with open(self.safety_log, 'a', encoding='utf-8') as f:
@@ -148,7 +151,7 @@ class SafetyGuard:
         """激活紧急停止"""
         self.emergency_stop = True
         msg = f"\n🚨 EMERGENCY STOP ACTIVATED: {reason}\n"
-        print(msg)
+        log.info(msg)
         
         with open(self.safety_log, 'a', encoding='utf-8') as f:
             f.write(msg)

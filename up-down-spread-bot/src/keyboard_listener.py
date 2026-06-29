@@ -6,6 +6,9 @@ import os
 import threading
 import time
 
+from utils.logging_setup import get_logger
+log = get_logger("keyboard")
+
 IS_WINDOWS = os.name == 'nt'
 
 if IS_WINDOWS:
@@ -89,7 +92,7 @@ class KeyboardListener:
                 try:
                     self.key_callbacks[key]['callback']()
                 except Exception as e:
-                    print(f"\n[KEYBOARD] 执行 '{key}' 的回调出错：{e}")
+                    log.info(f"\n[KEYBOARD] 执行 '{key}' 的回调出错：{e}")
     
     def start(self):
         """在后台线程中启动键盘监听器"""
@@ -99,7 +102,7 @@ class KeyboardListener:
         self.running = True
         self.thread = threading.Thread(target=self._listener_loop, daemon=True)
         self.thread.start()
-        print("[KEYBOARD] 监听器已启动")
+        log.info("[KEYBOARD] 监听器已启动")
     
     def stop(self):
         """停止键盘监听器"""
@@ -109,7 +112,7 @@ class KeyboardListener:
         self.running = False
         if self.thread:
             self.thread.join(timeout=1.0)
-        print("[KEYBOARD] 监听器已停止")
+        log.info("[KEYBOARD] 监听器已停止")
     
     def get_help_text(self):
         """获取所有已注册按键的帮助文本"""

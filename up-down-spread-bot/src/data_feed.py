@@ -4,6 +4,7 @@
 import json
 import time
 import threading
+import asyncio
 import websocket
 import subprocess
 import requests
@@ -14,6 +15,9 @@ import base64
 from typing import Optional, Dict
 import trader as trader_module
 from position_tracker import PositionTracker
+
+from utils.logging_setup import get_logger
+log = get_logger("datafeed")
 
 
 class DataFeed:
@@ -45,10 +49,7 @@ class DataFeed:
                 if self.market_interval_sec % 60 == 0
                 else "15m"
             )
-            print(
-                f"[DATA] Warning: market_interval_sec={self.market_interval_sec} "
-                f"(standard Polymarket crypto up/down uses 300 or 900). Slug suffix={self.market_slug_suffix}"
-            )
+            log.info(f"[DATA] Warning: market_interval_sec={self.market_interval_sec} " f"(standard Polymarket crypto up/down uses 300 or 900). Slug suffix={self.market_slug_suffix}")
         
         iv = self.market_interval_sec
         tnow = int(time.time())
@@ -92,6 +93,9 @@ class DataFeed:
         
         # 事件驱动的价格更新回调
         self.price_callbacks = []
+        
+        # 异步定时器任务（P1：由 start_async 创建）
+        self._timer_task: Optional[asyncio.Task] = None
     
     def start(self):
         """启动 BTC、ETH、SOL、XRP 的数据流 + 用户频道"""
@@ -100,25 +104,30 @@ class DataFeed:
             pm_thread = threading.Thread(target=self._polymarket_worker, args=(coin,), daemon=True)
             pm_thread.start()
             self.threads.append(pm_thread)
-            print(f"[DATA] Started Polymarket feed for {coin.upper()}")
+            log.info(f"[DATA] Started Polymarket feed for {coin.upper()}")
         
         # ❌ 用户频道已禁用 - WebSocket 认证无法使用
         # 改用 REST API takingAmount/makingAmount！
-        print(f"[DATA] ℹ️  Position tracking via REST API responses")
+        log.info(f"[DATA] ℹ️  Position tracking via REST API responses")
         
-        # 启动本地计时器更新（修复计时器冻结问题）
-        timer_thread = threading.Thread(target=self._timer_worker, daemon=True)
-        timer_thread.start()
-        self.threads.append(timer_thread)
+        # 异步定时器任务由 start_async() 在事件循环中创建
         
-        print(
-            f"[DATA] All feeds started: 4 Polymarket orderbooks "
-            f"({self.market_slug_suffix} / {self.market_interval_sec}s windows)"
-        )
+        log.info(f"[DATA] All feeds started: 4 Polymarket orderbooks " f"({self.market_slug_suffix} / {self.market_interval_sec}s windows)")
+    
+    async def start_async(self):
+        """在事件循环内启动异步定时器任务。"""
+        self._timer_task = asyncio.create_task(self._timer_async())
+        log.info(f"[DATA] Async timer task started")
+    
+    async def stop_async(self):
+        """异步停止所有数据流 + 取消定时器任务。"""
+        if self._timer_task and not self._timer_task.done():
+            self._timer_task.cancel()
+        self.stop()  # 复用同步 stop() 处理 WS 线程
     
     def stop(self):
         """停止所有数据流"""
-        print("[DATA] Stopping feeds...")
+        log.info("[DATA] Stopping feeds...")
         self.stop_event.set()
         
         # 给线程时间清理
@@ -126,7 +135,7 @@ class DataFeed:
             if t.is_alive():
                 t.join(timeout=1)
         
-        print("[DATA] Feeds stopped")
+        log.info("[DATA] Feeds stopped")
     
     def get_state(self, coin: str = 'btc') -> Dict:
         """获取指定币种的当前市场状态（线程安全）"""
@@ -189,7 +198,7 @@ class DataFeed:
                 iv = self.market_interval_sec
                 next_market = ((current_time // iv) + 1) * iv
                 wait_time = next_market - current_time
-                print(f"[PM-{coin.upper()}] Market {slug} not found (may not be open yet, next in {wait_time}s)")
+                log.info(f"[PM-{coin.upper()}] Market {slug} not found (may not be open yet, next in {wait_time}s)")
                 return None
             
             # 获取第一个市场
@@ -217,7 +226,7 @@ class DataFeed:
             }
             
         except Exception as e:
-            print(f"[PM-{coin.upper()}] Error fetching tokens: {e}")
+            log.info(f"[PM-{coin.upper()}] Error fetching tokens: {e}")
         return None
     
     def _polymarket_worker(self, coin: str):
@@ -271,7 +280,7 @@ class DataFeed:
                         self.markets[coin]['market_start_price'] = self.eth_price
                     # SOL/XRP：保持为 0.0（无需价格数据源）
             
-            print(f"[PM-{coin.upper()}] Connected to {market_slug}, reconnect in {reconnect_in}s")
+            log.info(f"[PM-{coin.upper()}] Connected to {market_slug}, reconnect in {reconnect_in}s")
             
             # 连接 WebSocket
             try:
@@ -321,7 +330,7 @@ class DataFeed:
                     break
                 
             except Exception as e:
-                print(f"[PM-{coin.upper()}] Error: {e}")
+                log.info(f"[PM-{coin.upper()}] Error: {e}")
                 time.sleep(5)
     
     def _on_pm_message(self, message: str, tokens: Dict, coin: str):
@@ -482,7 +491,7 @@ class DataFeed:
                                 callback(coin, market_state)
                             except Exception as e:
                                 # 记录日志但不崩溃
-                                print(f"[CALLBACK ERROR] {coin}: {e}")
+                                log.info(f"[CALLBACK ERROR] {coin}: {e}")
                                 import traceback
                                 traceback.print_exc()
                         
@@ -493,21 +502,20 @@ class DataFeed:
                             name=f"cb_{coin}_{int(time.time()*1000)}"
                         ).start()
                     except Exception as e:
-                        print(f"[CALLBACK ERROR] Failed to start callback for {coin}: {e}")
+                        log.info(f"[CALLBACK ERROR] Failed to start callback for {coin}: {e}")
                 
         except Exception as e:
             pass  # 忽略解析错误
     
-    def _timer_worker(self):
-        """每秒本地更新所有市场的计时器（基于每个币种的锁）"""
+    async def _timer_async(self):
+        """每秒本地更新所有市场的计时器（async 协程）。"""
         while not self.stop_event.is_set():
             current_time = int(time.time())
-            # 独立更新每个币种的计时器（完全并行）
             for coin in ['btc', 'eth', 'sol', 'xrp']:
                 with self.locks[coin]:
                     market_end_time = self.markets[coin]['market_end_time']
                     self.markets[coin]['seconds_till_end'] = max(0, market_end_time - current_time)
-            time.sleep(1)
+            await asyncio.sleep(1)
     
     def _user_channel_worker(self):
         """
@@ -525,13 +533,13 @@ class DataFeed:
             try:
                 ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
                 
-                print("[USER-WS] 🔌 Connecting to User Channel...")
+                log.info("[USER-WS] 🔌 Connecting to User Channel...")
                 
                 ws = websocket.WebSocketApp(
                     ws_url,
                     on_message=lambda ws, msg: self._on_user_message(msg),
-                    on_error=lambda ws, err: print(f"[USER-WS] ❌ Error: {err}") if err else None,
-                    on_close=lambda ws, code, reason: print(f"[USER-WS] 🔌 Disconnected (code={code})")
+                    on_error=lambda ws, err: log.error(f"[USER-WS] ❌ Error: {err}") if err else None,
+                    on_close=lambda ws, code, reason: log.warning(f"[USER-WS] 🔌 Disconnected (code={code})")
                 )
                 
                 def on_open(ws):
@@ -557,9 +565,9 @@ class DataFeed:
                             "type": "user"
                         }
                         ws.send(json.dumps(sub_msg))
-                        print("[USER-WS] ✅ Authenticated & subscribed to user channel")
+                        log.info("[USER-WS] ✅ Authenticated & subscribed to user channel")
                     except Exception as e:
-                        print(f"[USER-WS] ⚠️  Auth failed: {e}")
+                        log.warning(f"[USER-WS] ⚠️  Auth failed: {e}")
                 
                 ws.on_open = on_open
                 
@@ -567,11 +575,11 @@ class DataFeed:
                 ws.run_forever()
                 
             except Exception as e:
-                print(f"[USER-WS] ⚠️  Exception: {e}")
+                log.warning(f"[USER-WS] ⚠️  Exception: {e}")
             
             # 重连延迟
             if not self.stop_event.is_set():
-                print(f"[USER-WS] ⏳ Reconnecting in {reconnect_delay}s...")
+                log.info(f"[USER-WS] ⏳ Reconnecting in {reconnect_delay}s...")
                 time.sleep(reconnect_delay)
     
     def _on_user_message(self, message: str):
@@ -604,4 +612,4 @@ class DataFeed:
             # 非 JSON 消息（例如连接建立）
             pass
         except Exception as e:
-            print(f"[USER-WS] ⚠️  Parse error: {e}")
+            log.warning(f"[USER-WS] ⚠️  Parse error: {e}")

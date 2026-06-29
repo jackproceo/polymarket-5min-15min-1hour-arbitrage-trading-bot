@@ -181,6 +181,93 @@ def create_app(project_root: Path | None = None) -> Flask:
         wds.request_stop()
         return jsonify({"ok": True, "message": "已请求停止——机器人将优雅关闭。"})
 
+    # ==================================================================
+    # 数据页面路由
+    # ==================================================================
+
+    @app.route("/trades")
+    def trades_page():
+        """交易记录页面。"""
+        return render_template("trades.html")
+
+    @app.route("/balance")
+    def balance_page():
+        """余额变动页面。"""
+        return render_template("balance.html")
+
+    @app.route("/stats")
+    def stats_page():
+        """交易统计页面。"""
+        return render_template("stats.html")
+
+    # ==================================================================
+    # 数据 API
+    # ==================================================================
+
+    @app.route("/api/trades")
+    def api_trades():
+        """获取交易记录（支持翻页和币种筛选，数据全部来自 SQLite）。"""
+        try:
+            import db_manager
+            db = db_manager.get_db()
+            if db is None:
+                return jsonify({"trades": [], "total": 0, "page": 1})
+            limit = request.args.get("limit", 100, type=int)
+            offset = request.args.get("offset", 0, type=int)
+            coin = request.args.get("coin", None) or None
+            total = db.count_trades(coin=coin)
+            trades = db.get_trades(limit=limit, offset=offset, coin=coin)
+            for t in trades:
+                slug = t.get("market_slug", "")
+                if slug:
+                    t["polymarket_url"] = f"https://polymarket.com/event/{slug}"
+                t["pnl_display"] = round(t["pnl"], 2) if t.get("pnl") is not None else 0
+                t["roi_display"] = round(t["roi_pct"], 2) if t.get("roi_pct") is not None else 0
+            return jsonify({"trades": trades, "total": total})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/balance-changes")
+    def api_balance_changes():
+        """获取余额变动记录（支持翻页和操作类型筛选）。"""
+        try:
+            import db_manager
+            db = db_manager.get_db()
+            if db is None:
+                return jsonify({"changes": [], "total": 0})
+            limit = request.args.get("limit", 100, type=int)
+            op_type = request.args.get("operation_type", None)
+            changes = db.get_balance_changes(limit=limit, operation_type=op_type)
+            for c in changes:
+                c["amount_display"] = round(c["amount"], 2) if c.get("amount") is not None else 0
+            return jsonify({"changes": changes, "total": len(changes)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/trade-stats")
+    def api_trade_stats():
+        """获取交易统计数据（全部来自 SQLite GROUP BY）。"""
+        try:
+            import db_manager
+            db = db_manager.get_db()
+            if db is None:
+                return jsonify({"stats": {}, "by_coin": []})
+            stats = db.get_trade_stats()
+            by_coin = db.get_trade_stats_by_coin()
+            return jsonify({
+                "stats": {
+                    "count": stats.get("count", 0),
+                    "total_pnl": round(stats.get("total_pnl", 0), 2),
+                    "avg_roi": round(stats.get("avg_roi", 0), 2),
+                    "wins": stats.get("wins", 0),
+                    "losses": stats.get("count", 0) - stats.get("wins", 0),
+                    "win_rate": round(stats.get("wins", 0) / max(stats.get("count", 1), 1) * 100, 1),
+                },
+                "by_coin": by_coin,
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     return app
 
 
@@ -208,5 +295,5 @@ if __name__ == "__main__":
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     app = create_app()
-    print(f"[WEB] 打开 http://127.0.0.1:5050（仪表盘）")
+    logging.info("打开 http://127.0.0.1:5050（仪表盘）")
     app.run(host="127.0.0.1", port=5050, threaded=True)

@@ -5,8 +5,12 @@
 """
 import time
 import threading
+import asyncio
 import requests
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+
+from utils.logging_setup import get_logger
+log = get_logger("redeem")
 
 
 class SimpleRedeemCollector:
@@ -21,12 +25,12 @@ class SimpleRedeemCollector:
     ✅ 找到所有仓位（即使重启后）
     """
     
-    def __init__(self, wallet_address: str, config: dict, order_executor, trader_module,
+    def __init__(self, wallet_address: str, config, order_executor, trader_module,
                  multi_trader=None, notifier=None):
         """
         参数：
             wallet_address: 钱包地址（0x...）
-            config: 含参数的配置
+            config: 配置（Config 实例或 dict）
             order_executor: 用于赎回的 OrderExecutor 实例
             trader_module: 用于获取代币 ID 的 Trader 模块
             multi_trader: 用于创建交易记录的 MultiTrader 实例（可选）
@@ -55,21 +59,43 @@ class SimpleRedeemCollector:
         # 状态
         self.is_running = False
         self.last_check = 0
+        self._task: Optional[asyncio.Task] = None
         self.stats = {
             'total_checks': 0,
             'total_redeemed': 0,
             'startup_check_done': False
         }
         
-        print(f"[REDEEM COLLECTOR] 已初始化：")
-        print(f"  钱包：{wallet_address[:10]}...{wallet_address[-8:]}")
-        print(f"  启动检查：{self.startup_delay}s")
-        print(f"  定期检查：每 {self.check_interval//60} 分钟")
+        log.info(f"[REDEEM COLLECTOR] 已初始化：")
+        log.info(f"  钱包：{wallet_address[:10]}...{wallet_address[-8:]}")
+        log.info(f"  启动检查：{self.startup_delay}s")
+        log.info(f"  定期检查：每 {self.check_interval//60} 分钟")
+    
+    async def start_async(self):
+        """在事件循环中启动异步赎回循环。"""
+        if self._task and not self._task.done():
+            log.info("[REDEEM COLLECTOR] Async task already running!")
+            return
+        self.is_running = True
+        self._task = asyncio.create_task(self._loop_async())
+        log.info(f"[REDEEM COLLECTOR] ✅ 异步任务已创建")
+    
+    async def stop_async(self):
+        """异步停止赎回循环。"""
+        self.is_running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        log.info(f"[REDEEM COLLECTOR] 异步任务已停止")
     
     def start(self):
         """在后台线程中启动（守护线程——不阻塞关闭）"""
         if self.is_running:
-            print("[REDEEM COLLECTOR] 已在运行！")
+            log.info("[REDEEM COLLECTOR] 已在运行！")
             return
         
         self.is_running = True
@@ -79,31 +105,67 @@ class SimpleRedeemCollector:
             name="SimpleRedeemCollector"
         )
         self.thread.start()
-        print(f"[REDEEM COLLECTOR] ✅ 已启动（守护线程）")
+        log.info(f"[REDEEM COLLECTOR] ✅ 已启动（守护线程）")
     
     def stop(self):
         """停止后台线程"""
         self.is_running = False
         if hasattr(self, 'thread') and self.thread:
             self.thread.join(timeout=5)
-        print(f"[REDEEM COLLECTOR] 已停止")
+        log.info(f"[REDEEM COLLECTOR] 已停止")
+    
+    async def _loop_async(self):
+        """后台异步循环——在事件循环中运行。"""
+        log.info(f"\n[REDEEM COLLECTOR] 异步后台循环已启动")
+        
+        # 启动检查
+        log.info(f"[REDEEM COLLECTOR] ⏰ {self.startup_delay}s 后执行启动检查...")
+        await asyncio.sleep(self.startup_delay)
+        
+        log.info(f"\n[REDEEM COLLECTOR] 🚀 启动检查")
+        try:
+            await asyncio.to_thread(self._check_and_redeem_all, "STARTUP")
+            self.stats['startup_check_done'] = True
+        except Exception as e:
+            log.warning(f"[REDEEM COLLECTOR] ⚠️ 启动检查错误：{e}")
+            import traceback
+            traceback.print_exc()
+        
+        # 首次定期检查
+        remaining_delay = max(0, self.first_delay - self.startup_delay)
+        if remaining_delay > 0:
+            log.info(f"\n[REDEEM COLLECTOR] ⏰ {remaining_delay//60} 分钟后执行首次定期检查...")
+            await asyncio.sleep(remaining_delay)
+        
+        # 定期检查循环
+        while self.is_running:
+            try:
+                await asyncio.to_thread(self._check_and_redeem_all, "PERIODIC")
+            except Exception as e:
+                log.warning(f"[REDEEM COLLECTOR] ⚠️ 定期检查错误：{e}")
+                import traceback
+                traceback.print_exc()
+            
+            if self.is_running:
+                log.info(f"[REDEEM COLLECTOR] ⏰ {self.check_interval//60} 分钟后下次检查...")
+                await asyncio.sleep(self.check_interval)
     
     def _loop(self):
         """后台循环——在独立线程中运行"""
-        print(f"\n[REDEEM COLLECTOR] 后台循环已启动")
+        log.info(f"\n[REDEEM COLLECTOR] 后台循环已启动")
         
         # 🔥 启动检查：启动后立即执行（startup_delay 后）
         # 目标：收集脚本启动前累积的所有仓位
-        print(f"[REDEEM COLLECTOR] ⏰ {self.startup_delay}s 后执行启动检查...")
-        print(f"[REDEEM COLLECTOR]    将收集重启前所有未赎回的仓位")
+        log.info(f"[REDEEM COLLECTOR] ⏰ {self.startup_delay}s 后执行启动检查...")
+        log.info(f"[REDEEM COLLECTOR]    将收集重启前所有未赎回的仓位")
         time.sleep(self.startup_delay)
         
-        print(f"\n[REDEEM COLLECTOR] 🚀 启动检查")
+        log.info(f"\n[REDEEM COLLECTOR] 🚀 启动检查")
         try:
             self._check_and_redeem_all(check_type="STARTUP")
             self.stats['startup_check_done'] = True
         except Exception as e:
-            print(f"[REDEEM COLLECTOR] ⚠️ 启动检查错误：{e}")
+            log.warning(f"[REDEEM COLLECTOR] ⚠️ 启动检查错误：{e}")
             import traceback
             traceback.print_exc()
         
@@ -111,7 +173,7 @@ class SimpleRedeemCollector:
         # （针对刚关闭的新市场）
         remaining_delay = max(0, self.first_delay - self.startup_delay)
         if remaining_delay > 0:
-            print(f"\n[REDEEM COLLECTOR] ⏰ {remaining_delay//60} 分钟后执行首次定期检查...")
+            log.info(f"\n[REDEEM COLLECTOR] ⏰ {remaining_delay//60} 分钟后执行首次定期检查...")
             time.sleep(remaining_delay)
         
         # 🔥 定期检查：每 check_interval 执行一次
@@ -119,13 +181,13 @@ class SimpleRedeemCollector:
             try:
                 self._check_and_redeem_all(check_type="PERIODIC")
             except Exception as e:
-                print(f"[REDEEM COLLECTOR] ⚠️ 定期检查错误：{e}")
+                log.warning(f"[REDEEM COLLECTOR] ⚠️ 定期检查错误：{e}")
                 import traceback
                 traceback.print_exc()
             
             # 等待下次检查
             if self.is_running:
-                print(f"[REDEEM COLLECTOR] ⏰ {self.check_interval//60} 分钟后下次检查...")
+                log.info(f"[REDEEM COLLECTOR] ⏰ {self.check_interval//60} 分钟后下次检查...")
                 time.sleep(self.check_interval)
     
     def _check_and_redeem_all(self, check_type: str = "PERIODIC"):
@@ -135,13 +197,13 @@ class SimpleRedeemCollector:
         参数：
             check_type: "STARTUP"（启动时）或 "PERIODIC"（定期）
         """
-        print(f"\n{'='*80}")
+        log.info(f"\n{'='*80}")
         if check_type == "STARTUP":
-            print(f"[REDEEM COLLECTOR] 🚀 启动检查")
-            print(f"[REDEEM COLLECTOR] 收集重启前未赎回的仓位...")
+            log.info(f"[REDEEM COLLECTOR] 🚀 启动检查")
+            log.info(f"[REDEEM COLLECTOR] 收集重启前未赎回的仓位...")
         else:
-            print(f"[REDEEM COLLECTOR] 🔍 定期检查 #{self.stats['total_checks'] + 1}")
-        print(f"{'='*80}")
+            log.info(f"[REDEEM COLLECTOR] 🔍 定期检查 #{self.stats['total_checks'] + 1}")
+        log.info(f"{'='*80}")
         
         self.stats['total_checks'] += 1
         self.last_check = time.time()
@@ -150,29 +212,29 @@ class SimpleRedeemCollector:
         positions = self._fetch_redeemable_positions()
         
         if positions is None:
-            print(f"[REDEEM COLLECTOR] ⚠️ API 请求失败，跳过本轮")
+            log.warning(f"[REDEEM COLLECTOR] ⚠️ API 请求失败，跳过本轮")
             return
         
-        print(f"[REDEEM COLLECTOR] 找到 {len(positions)} 个可赎回仓位")
+        log.info(f"[REDEEM COLLECTOR] 找到 {len(positions)} 个可赎回仓位")
         
         if not positions:
-            print(f"[REDEEM COLLECTOR] ✓ 无需赎回")
+            log.info(f"[REDEEM COLLECTOR] ✓ 无需赎回")
             if check_type == "STARTUP":
-                print(f"[REDEEM COLLECTOR] ✓ 重启前所有仓位已全部领取")
+                log.info(f"[REDEEM COLLECTOR] ✓ 重启前所有仓位已全部领取")
             return
         
         # 显示汇总
         total_size = sum(p.get('size', 0) for p in positions)
         total_value = sum(p.get('currentValue', 0) for p in positions)
-        print(f"[REDEEM COLLECTOR] 汇总：")
-        print(f"  总合约数：{total_size:.2f}")
-        print(f"  预估价值：${total_value:.2f}")
+        log.info(f"[REDEEM COLLECTOR] 汇总：")
+        log.info(f"  总合约数：{total_size:.2f}")
+        log.info(f"  预估价值：${total_value:.2f}")
         
         if check_type == "STARTUP":
-            print(f"[REDEEM COLLECTOR] 💰 这些仓位在脚本重启前已累积")
+            log.info(f"[REDEEM COLLECTOR] 💰 这些仓位在脚本重启前已累积")
         
         # 第 2 步：逐个赎回（顺序执行）
-        print(f"\n[REDEEM COLLECTOR] 开始赎回流程...")
+        log.info(f"\n[REDEEM COLLECTOR] 开始赎回流程...")
         success_count = 0
         failed_count = 0
         
@@ -187,11 +249,11 @@ class SimpleRedeemCollector:
             if i < len(positions):
                 time.sleep(self.pause_between)
         
-        print(f"\n[REDEEM COLLECTOR] ✅ 检查完成")
-        print(f"  成功：{success_count}/{len(positions)}")
-        print(f"  失败：{failed_count}/{len(positions)}")
-        print(f"  本轮已赎回（会话）：{self.stats['total_redeemed']}")
-        print(f"{'='*80}\n")
+        log.info(f"\n[REDEEM COLLECTOR] ✅ 检查完成")
+        log.info(f"  成功：{success_count}/{len(positions)}")
+        log.info(f"  失败：{failed_count}/{len(positions)}")
+        log.info(f"  本轮已赎回（会话）：{self.stats['total_redeemed']}")
+        log.info(f"{'='*80}\n")
     
     def _fetch_redeemable_positions(self) -> Optional[List[Dict]]:
         """
@@ -206,9 +268,9 @@ class SimpleRedeemCollector:
             'limit': 500
         }
         
-        print(f"[REDEEM COLLECTOR] 正在请求 Polymarket API...")
-        print(f"  URL: {url}")
-        print(f"  过滤：redeemable=true, sizeThreshold={self.size_threshold}")
+        log.info(f"[REDEEM COLLECTOR] 正在请求 Polymarket API...")
+        log.info(f"  URL: {url}")
+        log.info(f"  过滤：redeemable=true, sizeThreshold={self.size_threshold}")
         
         for attempt in range(1, self.api_max_retries + 1):
             try:
@@ -217,44 +279,44 @@ class SimpleRedeemCollector:
                 # ✅ 成功
                 if response.status_code == 200:
                     positions = response.json()
-                    print(f"[REDEEM COLLECTOR] ✓ API 响应：{len(positions)} 个仓位")
+                    log.info(f"[REDEEM COLLECTOR] ✓ API 响应：{len(positions)} 个仓位")
                     return positions
                 
                 # ⚠️ 速率限制
                 elif response.status_code == 429:
                     retry_after = int(response.headers.get('Retry-After', self.api_retry_delay))
-                    print(f"[REDEEM COLLECTOR] ⚠️ 达到速率限制（429）")
-                    print(f"[REDEEM COLLECTOR]    等待重试：{retry_after}s")
+                    log.warning(f"[REDEEM COLLECTOR] ⚠️ 达到速率限制（429）")
+                    log.info(f"[REDEEM COLLECTOR]    等待重试：{retry_after}s")
                     
                     if attempt < self.api_max_retries:
-                        print(f"[REDEEM COLLECTOR]    等待 {retry_after}s 后重试...")
+                        log.info(f"[REDEEM COLLECTOR]    等待 {retry_after}s 后重试...")
                         time.sleep(retry_after)
                         continue
                     else:
-                        print(f"[REDEEM COLLECTOR] ❌ 尝试 {self.api_max_retries} 次后速率限制仍存在")
+                        log.error(f"[REDEEM COLLECTOR] ❌ 尝试 {self.api_max_retries} 次后速率限制仍存在")
                         return None
                 
                 # ❌ 其他错误
                 else:
-                    print(f"[REDEEM COLLECTOR] ❌ API 错误：{response.status_code}")
-                    print(f"  响应：{response.text[:200]}")
+                    log.error(f"[REDEEM COLLECTOR] ❌ API 错误：{response.status_code}")
+                    log.info(f"  响应：{response.text[:200]}")
                     
                     if attempt < self.api_max_retries:
                         wait_time = 5 * attempt  # 指数退避
-                        print(f"[REDEEM COLLECTOR]    重试 {attempt}/{self.api_max_retries}，等待 {wait_time}s...")
+                        log.info(f"[REDEEM COLLECTOR]    重试 {attempt}/{self.api_max_retries}，等待 {wait_time}s...")
                         time.sleep(wait_time)
                         continue
                     
                     return None
             
             except requests.exceptions.Timeout:
-                print(f"[REDEEM COLLECTOR] ⚠️ 请求超时（尝试 {attempt}）")
+                log.warning(f"[REDEEM COLLECTOR] ⚠️ 请求超时（尝试 {attempt}）")
                 if attempt < self.api_max_retries:
                     time.sleep(5)
                     continue
             
             except Exception as e:
-                print(f"[REDEEM COLLECTOR] ❌ 请求异常（尝试 {attempt}）：{e}")
+                log.error(f"[REDEEM COLLECTOR] ❌ 请求异常（尝试 {attempt}）：{e}")
                 if attempt < self.api_max_retries:
                     time.sleep(5)
                     continue
@@ -275,30 +337,30 @@ class SimpleRedeemCollector:
         current_value = position.get('currentValue', 0)
         outcome = position.get('outcome', '')
         
-        print(f"\n[REDEEM COLLECTOR] [{index}/{total}] 正在处理：{slug}")
-        print(f"  条件 ID：{condition_id[:20]}...")
-        print(f"  数量：{size:.2f} 合约")
-        print(f"  价值：${current_value:.2f}")
-        print(f"  结果：{outcome}")
+        log.info(f"\n[REDEEM COLLECTOR] [{index}/{total}] 正在处理：{slug}")
+        log.info(f"  条件 ID：{condition_id[:20]}...")
+        log.info(f"  数量：{size:.2f} 合约")
+        log.info(f"  价值：${current_value:.2f}")
+        log.info(f"  结果：{outcome}")
         
         try:
             # 从缓存获取代币 ID
             token_ids = self.trader.get_token_ids(slug)
             
             if not token_ids:
-                print(f"[REDEEM COLLECTOR]   ️缓存中无代币 ID，正在获取元数据...")
+                log.info(f"[REDEEM COLLECTOR]   ️缓存中无代币 ID，正在获取元数据...")
                 # 尝试获取元数据
                 metadata = self.trader.get_market_metadata(slug)
                 token_ids = self.trader.get_token_ids(slug)
             
             if not token_ids or not token_ids.get('UP') or not token_ids.get('DOWN'):
-                print(f"[REDEEM COLLECTOR] ⚠️ 无 {slug} 的代币 ID，跳过")
-                print(f"[REDEEM COLLECTOR]    无法在没有代币 ID 的情况下赎回此仓位")
+                log.warning(f"[REDEEM COLLECTOR] ⚠️ 无 {slug} 的代币 ID，跳过")
+                log.info(f"[REDEEM COLLECTOR]    无法在没有代币 ID 的情况下赎回此仓位")
                 return False
             
-            print(f"[REDEEM COLLECTOR]   UP 代币：{token_ids['UP'][:10]}...")
-            print(f"[REDEEM COLLECTOR]   DOWN 代币：{token_ids['DOWN'][:10]}...")
-            print(f"[REDEEM COLLECTOR]   正在调用 redeem_position()...")
+            log.info(f"[REDEEM COLLECTOR]   UP 代币：{token_ids['UP'][:10]}...")
+            log.info(f"[REDEEM COLLECTOR]   DOWN 代币：{token_ids['DOWN'][:10]}...")
+            log.info(f"[REDEEM COLLECTOR]   正在调用 redeem_position()...")
             
             # 通过 order_executor 调用赎回
             success, amount = self.executor.redeem_position(
@@ -310,7 +372,7 @@ class SimpleRedeemCollector:
             )
             
             if success:
-                print(f"[REDEEM COLLECTOR] ✅ 已赎回 ${amount:.2f} USDC！")
+                log.info(f"[REDEEM COLLECTOR] ✅ 已赎回 ${amount:.2f} USDC！")
                 self.stats['total_redeemed'] += 1
                 
                 # 🔥 修复：为仪表盘创建交易记录（针对所有 4 个币种）
@@ -319,12 +381,12 @@ class SimpleRedeemCollector:
                         from polymarket_api import get_market_outcome
                         
                         # 从 Polymarket API 获取真实市场结果
-                        print(f"[REDEEM COLLECTOR]   正在从 API 获取市场结果...")
+                        log.info(f"[REDEEM COLLECTOR]   正在从 API 获取市场结果...")
                         api_result = get_market_outcome(slug)
                         
                         if api_result.get("success") and api_result.get("winner"):
                             winner = api_result["winner"]
-                            print(f"[REDEEM COLLECTOR]   赢家：{winner}")
+                            log.info(f"[REDEEM COLLECTOR]   赢家：{winner}")
                             
                             # 从 market_slug 确定币种
                             coin = None
@@ -335,7 +397,7 @@ class SimpleRedeemCollector:
                             
                             if coin:
                                 strategy_name = f"late_v3_{coin}"
-                                print(f"[REDEEM COLLECTOR]   正在为 {strategy_name} 创建交易记录...")
+                                log.info(f"[REDEEM COLLECTOR]   正在为 {strategy_name} 创建交易记录...")
                                 
                                 # 通过 multi_trader 创建交易记录
                                 result = self.multi_trader.close_market(
@@ -347,9 +409,9 @@ class SimpleRedeemCollector:
                                 )
                                 
                                 if result:
-                                    print(f"[REDEEM COLLECTOR]   ✅ 交易记录已创建！")
-                                    print(f"[REDEEM COLLECTOR]      盈亏：${result['pnl']:+.2f}")
-                                    print(f"[REDEEM COLLECTOR]      收益率：{result['roi_pct']:+.1f}%")
+                                    log.info(f"[REDEEM COLLECTOR]   ✅ 交易记录已创建！")
+                                    log.info(f"[REDEEM COLLECTOR]      盈亏：${result['pnl']:+.2f}")
+                                    log.info(f"[REDEEM COLLECTOR]      收益率：{result['roi_pct']:+.1f}%")
                                     
                                     # 发送 Telegram 通知
                                     if self.notifier:
@@ -380,22 +442,22 @@ class SimpleRedeemCollector:
                                                 session_stats=session_stats,
                                                 portfolio_stats=portfolio_stats
                                             )
-                                            print(f"[REDEEM COLLECTOR]      ✅ Telegram 通知已发送")
+                                            log.info(f"[REDEEM COLLECTOR]      ✅ Telegram 通知已发送")
                                         except Exception as notify_err:
-                                            print(f"[REDEEM COLLECTOR]      ⚠️ 通知失败：{notify_err}")
+                                            log.warning(f"[REDEEM COLLECTOR]      ⚠️ 通知失败：{notify_err}")
                                             import traceback
                                             traceback.print_exc()
                                 else:
-                                    print(f"[REDEEM COLLECTOR]   ⚠️ 交易记录创建返回 None")
-                                    print(f"[REDEEM COLLECTOR]      （仓位可能为空）")
+                                    log.warning(f"[REDEEM COLLECTOR]   ⚠️ 交易记录创建返回 None")
+                                    log.info(f"[REDEEM COLLECTOR]      （仓位可能为空）")
                             else:
-                                print(f"[REDEEM COLLECTOR]   ⚠️ 无法从 slug 确定币种：{slug}")
+                                log.warning(f"[REDEEM COLLECTOR]   ⚠️ 无法从 slug 确定币种：{slug}")
                         else:
-                            print(f"[REDEEM COLLECTOR]   ⚠️ 市场结果不可用")
-                            print(f"[REDEEM COLLECTOR]      API 结果：{api_result}")
+                            log.warning(f"[REDEEM COLLECTOR]   ⚠️ 市场结果不可用")
+                            log.info(f"[REDEEM COLLECTOR]      API 结果：{api_result}")
                     
                     except Exception as trade_err:
-                        print(f"[REDEEM COLLECTOR]   ⚠️ 创建交易记录失败：{trade_err}")
+                        log.warning(f"[REDEEM COLLECTOR]   ⚠️ 创建交易记录失败：{trade_err}")
                         import traceback
                         traceback.print_exc()
                 
@@ -403,18 +465,18 @@ class SimpleRedeemCollector:
                 try:
                     if hasattr(self.trader, 'order_executor') and self.trader.order_executor:
                         self.trader.order_executor.safety.reset_market(slug)
-                        print(f"[REDEEM COLLECTOR]   市场跟踪已重置")
+                        log.info(f"[REDEEM COLLECTOR]   市场跟踪已重置")
                 except Exception as reset_err:
-                    print(f"[REDEEM COLLECTOR]   ⚠️ 重置跟踪失败：{reset_err}")
+                    log.warning(f"[REDEEM COLLECTOR]   ⚠️ 重置跟踪失败：{reset_err}")
                 
                 return True
             else:
-                print(f"[REDEEM COLLECTOR] ⚠️ 赎回失败")
-                print(f"[REDEEM COLLECTOR]    原因：预言机未解析或无代币")
+                log.warning(f"[REDEEM COLLECTOR] ⚠️ 赎回失败")
+                log.info(f"[REDEEM COLLECTOR]    原因：预言机未解析或无代币")
                 return False
         
         except Exception as e:
-            print(f"[REDEEM COLLECTOR] ❌ 处理 {slug} 时出错：{e}")
+            log.error(f"[REDEEM COLLECTOR] ❌ 处理 {slug} 时出错：{e}")
             import traceback
             traceback.print_exc()
             return False

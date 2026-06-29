@@ -11,6 +11,9 @@ from queue import Queue, Empty
 from typing import Dict
 from dotenv import load_dotenv
 
+from utils.logging_setup import get_logger
+log = get_logger("notifier")
+
 # Load environment variables from .env file
 load_dotenv("/root/4coins_live/.env")
 
@@ -140,7 +143,7 @@ class TelegramNotifier:
         
         try:
             self.queue.put_nowait(message)
-        except:
+        except Exception:
             self.dropped_count += 1
     
     def send_market_closed(self, coin: str, trade: Dict, session_stats: Dict, portfolio_stats: Dict = None):
@@ -381,7 +384,7 @@ Winner: {winner}"""
                                 if from_chat_id != self.chat_id:
                                     continue
                                 
-                                print(f"[TELEGRAM] Callback received: {callback_data}")
+                                log.info(f"[TELEGRAM] Callback received: {callback_data}")
                                 
                                 try:
                                     # 赎回回调
@@ -406,7 +409,7 @@ Winner: {winner}"""
                                 
                                 except Exception as e:
                                     error_msg = str(e)[:200]
-                                    print(f"[TELEGRAM] Callback error: {error_msg}")
+                                    log.info(f"[TELEGRAM] Callback error: {error_msg}")
                                     self.answer_callback_query(callback_id, f"Error: {error_msg[:50]}", show_alert=True)
                                 
                                 continue
@@ -594,14 +597,14 @@ Winner: {winner}"""
             if response.status_code == 200:
                 data = response.json()
                 message_id = data['result']['message_id']
-                print(f"[TELEGRAM] ✅ Message with buttons sent (ID: {message_id})")
+                log.info(f"[TELEGRAM] ✅ Message with buttons sent (ID: {message_id})")
                 return message_id
             else:
-                print(f"[TELEGRAM] ⚠️ Failed to send message with buttons: {response.status_code}")
+                log.warning(f"[TELEGRAM] ⚠️ Failed to send message with buttons: {response.status_code}")
                 return None
                 
         except Exception as e:
-            print(f"[TELEGRAM] ⚠️ Error sending message with buttons: {e}")
+            log.warning(f"[TELEGRAM] ⚠️ Error sending message with buttons: {e}")
             return None
     
     def edit_message_text(self, message_id: int, text: str, buttons: list = None) -> bool:
@@ -634,14 +637,14 @@ Winner: {winner}"""
             response = requests.post(url, json=payload, timeout=10)
             
             if response.status_code == 200:
-                print(f"[TELEGRAM] ✅ Message edited (ID: {message_id})")
+                log.info(f"[TELEGRAM] ✅ Message edited (ID: {message_id})")
                 return True
             else:
-                print(f"[TELEGRAM] ⚠️ Failed to edit message: {response.status_code}")
+                log.warning(f"[TELEGRAM] ⚠️ Failed to edit message: {response.status_code}")
                 return False
                 
         except Exception as e:
-            print(f"[TELEGRAM] ⚠️ Error editing message: {e}")
+            log.warning(f"[TELEGRAM] ⚠️ Error editing message: {e}")
             return False
     
     def answer_callback_query(self, callback_query_id: str, text: str = "", show_alert: bool = False) -> bool:
@@ -671,7 +674,7 @@ Winner: {winner}"""
             return response.status_code == 200
                 
         except Exception as e:
-            print(f"[TELEGRAM] ⚠️ Error answering callback: {e}")
+            log.warning(f"[TELEGRAM] ⚠️ Error answering callback: {e}")
             return False
     
     def send_message(self, message: str):

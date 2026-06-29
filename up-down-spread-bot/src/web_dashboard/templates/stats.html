@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>交易统计 — Meridian</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="layout">
+    <header class="header">
+      <h1>交易统计</h1>
+      <p class="subtitle">总体表现 · 分币种统计</p>
+      <div class="header-actions">
+        <span id="conn-badge" class="badge badge-warn">连接中…</span>
+        <a href="/" class="btn btn-secondary">仪表盘</a>
+        <a href="/trades" class="btn btn-secondary">交易记录</a>
+        <a href="/balance" class="btn btn-secondary">余额变动</a>
+        <a href="/stats" class="btn btn-primary" style="opacity:0.8">交易统计</a>
+        <button type="button" id="btn-refresh" class="btn btn-secondary">刷新</button>
+        <button type="button" id="btn-stop" class="btn btn-danger">请求停止</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>总体统计</h2>
+      <div class="grid-4" id="overall-stats"></div>
+    </section>
+
+    <section class="panel">
+      <h2>分币种统计</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="coin-stats-table">
+          <thead>
+            <tr>
+              <th>币种</th>
+              <th>交易次数</th>
+              <th>总盈亏 ($)</th>
+              <th>胜场</th>
+              <th>负场</th>
+              <th>胜率 (%)</th>
+              <th>平均 ROI (%)</th>
+            </tr>
+          </thead>
+          <tbody id="coin-stats-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>API: <code>/api/trade-stats</code> · 数据来源：SQLite 数据库</p>
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    (function () {
+      const overallEl = document.getElementById("overall-stats");
+      const coinBody = document.getElementById("coin-stats-body");
+
+      function fmtUsd(n) {
+        const sign = n >= 0 ? "+" : "";
+        return sign + "$" + Number(n).toFixed(2);
+      }
+
+      function card(label, value, valClass) {
+        const vc = valClass ? ` ${valClass}` : "";
+        return `<div class="stat-card"><div class="label">${label}</div><div class="value${vc}">${escapeHtml(String(value))}</div></div>`;
+      }
+
+      function escapeHtml(s) {
+        if (s == null) return "";
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      async function fetchStats() {
+        const r = await fetch("/api/trade-stats", { cache: "no-store" });
+        return r.json();
+      }
+
+      function render(data) {
+        const s = data.stats || {};
+        const totalPnl = s.total_pnl || 0;
+        overallEl.innerHTML = [
+          card("总交易次数", String(s.count ?? 0)),
+          card("总盈亏", fmtUsd(totalPnl), totalPnl >= 0 ? "pos" : "neg"),
+          card("胜场 / 负场", `${s.wins ?? 0} / ${s.losses ?? 0}`),
+          card("胜率", (s.win_rate ?? 0) + "%", s.win_rate >= 50 ? "pos" : "neg"),
+          card("平均 ROI", (s.avg_roi ?? 0) + "%"),
+        ].join("");
+
+        const coins = data.by_coin || [];
+        if (!coins.length) {
+          coinBody.innerHTML = '<tr><td colspan="7">暂无数据</td></tr>';
+          return;
+        }
+        coinBody.innerHTML = coins.map(c => {
+          const pnl = c.total_pnl || 0;
+          const pnlCls = pnl >= 0 ? "pnl-pos" : "pnl-neg";
+          return `<tr>
+            <td><strong>${escapeHtml(c.coin?.toUpperCase() || "—")}</strong></td>
+            <td>${c.count}</td>
+            <td class="${pnlCls}">${fmtUsd(pnl)}</td>
+            <td>${c.wins}</td>
+            <td>${c.losses}</td>
+            <td>${c.win_rate ?? 0}%</td>
+            <td>${c.avg_roi ?? 0}%</td>
+          </tr>`;
+        }).join("");
+      }
+
+      async function load() {
+        const data = await fetchStats();
+        render(data);
+      }
+
+      document.getElementById("btn-refresh").addEventListener("click", load);
+      load();
+    })();
+  </script>
+</body>
+</html>

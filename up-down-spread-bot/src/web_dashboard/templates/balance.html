@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>余额变动 — Meridian</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="layout">
+    <header class="header">
+      <h1>余额变动</h1>
+      <p class="subtitle">钱包余额变更记录 · 买入 / 卖出 / 赎回</p>
+      <div class="header-actions">
+        <span id="conn-badge" class="badge badge-warn">连接中…</span>
+        <a href="/" class="btn btn-secondary">仪表盘</a>
+        <a href="/trades" class="btn btn-secondary">交易记录</a>
+        <a href="/balance" class="btn btn-primary" style="opacity:0.8">余额变动</a>
+        <a href="/stats" class="btn btn-secondary">交易统计</a>
+        <button type="button" id="btn-refresh" class="btn btn-secondary">刷新</button>
+        <button type="button" id="btn-stop" class="btn btn-danger">请求停止</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="filter-row">
+        <label>
+          操作类型筛选：
+          <select id="filter-type">
+            <option value="">全部</option>
+            <option value="trade">交易</option>
+            <option value="redeem">赎回</option>
+            <option value="blockchain_update">链上更新</option>
+            <option value="deposit">充值</option>
+            <option value="withdrawal">提现</option>
+          </select>
+        </label>
+        <span class="hint" id="change-count"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="changes-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>操作类型</th>
+              <th>变动金额 ($)</th>
+              <th>变动前 ($)</th>
+              <th>变动后 ($)</th>
+              <th>市场</th>
+              <th>币种</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody id="changes-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>API: <code>/api/balance-changes</code> · 数据来源：SQLite 数据库</p>
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    (function () {
+      const LIMIT = 200;
+      const tbody = document.getElementById("changes-body");
+      const typeSelect = document.getElementById("filter-type");
+      const changeCount = document.getElementById("change-count");
+
+      async function fetchChanges() {
+        const opType = typeSelect.value;
+        let url = `/api/balance-changes?limit=${LIMIT}`;
+        if (opType) url += `&operation_type=${opType}`;
+        const r = await fetch(url, { cache: "no-store" });
+        return r.json();
+      }
+
+      function render(data) {
+        const rows = data.changes || [];
+        changeCount.textContent = `共 ${data.total} 条记录`;
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="8">暂无余额变动记录</td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(c => {
+          const amt = c.amount_display || 0;
+          const amtCls = amt >= 0 ? "pnl-pos" : "pnl-neg";
+          const slugShort = (c.market_slug || "").split("-").pop() || c.market_slug || "—";
+          return `<tr>
+            <td class="cell-nobreak">${escapeHtml(c.timestamp || "—")}</td>
+            <td>${escapeHtml(c.operation_type || "—")}</td>
+            <td class="${amtCls}"><strong>${amt >= 0 ? "+" : ""}${amt.toFixed(2)}</strong></td>
+            <td>${c.balance_before != null ? c.balance_before.toFixed(2) : "—"}</td>
+            <td>${c.balance_after != null ? c.balance_after.toFixed(2) : "—"}</td>
+            <td>${slugShort}</td>
+            <td>${escapeHtml(c.coin || "—")}</td>
+            <td>${escapeHtml(c.note || "—")}</td>
+          </tr>`;
+        }).join("");
+      }
+
+      function escapeHtml(s) {
+        if (s == null) return "";
+        const d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      async function load() {
+        const data = await fetchChanges();
+        render(data);
+      }
+
+      document.getElementById("btn-refresh").addEventListener("click", load);
+      typeSelect.addEventListener("change", load);
+      load();
+    })();
+  </script>
+</body>
+</html>
