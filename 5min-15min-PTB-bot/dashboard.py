@@ -142,6 +142,38 @@ def api_btc_market_minutes():
     return jsonify({"ok": True, "minutes": get_btc_market_minutes()})
 
 
+@app.route("/api/db/overview")
+def api_db_overview():
+    """首页概览：合并 stats + account + trades 一次请求返回。"""
+    err = _require_pwd()
+    if err:
+        return err
+    try:
+        result = {"stats": get_trade_stats()}
+        row = get_latest_account_snapshot()
+        result["account"] = _safe_row(row) if row else {}
+        conn = _get_conn()
+        cols = ",".join([
+            "id","polymarket_slug","order_id","side","action",
+            "open_reason","entry_price","exit_price","amount_usdc","shares",
+            "pnl_usd","cumulative_pnl_usd","diff_at_trade","btc_price","ptb_price",
+            "remaining_sec","fee_usdc","status","result","btc_market_minutes",
+            "simulation","created_at"
+        ])
+        items = []
+        for row in conn.execute(f"SELECT {cols} FROM trades ORDER BY created_at DESC LIMIT 100"):
+            try:
+                items.append(_safe_row(row))
+            except Exception:
+                pass
+        result["trades"] = items
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/db/stats")
 def api_db_stats():
     err = _require_pwd()

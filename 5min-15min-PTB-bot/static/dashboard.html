@@ -1030,10 +1030,21 @@ function startSSE() {
   } catch(_) {}
 }
 
-// ── DB 数据轮询 ──
+// ── DB 数据轮询（合并为单次请求）──
 async function pollDb() {
-  await Promise.all([fetchDbStats(), fetchDbAccount(), fetchDbTrades()]);
-  renderAllDb();
+  try {
+    const r = await authFetch("/api/db/overview");
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.stats) dbStats = j.stats;
+    if (j.account) dbAccount = j.account;
+    if (j.trades) {
+      allTrades = j.trades;
+      dbTrades = j.trades;
+      if (currentPage === "trades") renderTradeHistory();
+    }
+    renderAllDb();
+  } catch(e) { console.error("pollDb err", e); }
 }
 
 // Fallback HTTP polling for live data
@@ -1285,16 +1296,15 @@ function renderStatsDetail() {
 // ── 增强初始化 ──
 function initApp() {
   pollDb();
-  setInterval(pollDb, 5000);
+  setInterval(pollDb, 10000);     // 10s 合并请求（之前 5s 三路并发）
   startSSE();
-  setInterval(pollStatus, 5000);
-  setInterval(pollLogs, 2000);
+  // SSE 提供实时 status & logs，HTTP 降级拉长间隔
+  setInterval(pollStatus, 30000); // 30s
+  setInterval(pollLogs, 15000);   // 15s（之前 2s）
 
-  // 子页面数据轮询（首页交易记录已由 pollDb → fetchDbTrades 覆盖）
-  fetchBalanceHistory();
-  fetchStatsDetail();
-  setInterval(fetchBalanceHistory, 10000);
-  setInterval(fetchStatsDetail, 10000);
+  // 子页面数据轮询（初始错开 3s/6s 避免同时并发）
+  setTimeout(() => { fetchBalanceHistory(); setInterval(fetchBalanceHistory, 30000); }, 3000);
+  setTimeout(() => { fetchStatsDetail(); setInterval(fetchStatsDetail, 30000); }, 6000);
 }
 
 // 周期切换
