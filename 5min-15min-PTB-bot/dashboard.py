@@ -5,6 +5,7 @@ Flask路由、SSE流、Web服务器启动。
 """
 import json
 import threading
+import time
 
 from flask import Response, jsonify, request, send_from_directory, stream_with_context
 
@@ -180,15 +181,67 @@ def api_db_trades():
         raw = request.args.get("limit", "100")
         limit = int(raw) if raw and str(raw).isdigit() else 100
         conn = _get_conn()
-        rows = conn.execute(
-            "SELECT * FROM trades ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return jsonify({"items": _safe_rows(rows)})
+        # 不 SELECT * 避免碰损列；逐条捕获坏行
+        cols = ",".join([
+            "id","polymarket_slug","condition_id","order_id","side","action",
+            "open_reason","entry_price","exit_price","amount_usdc","shares",
+            "pnl_usd","cumulative_pnl_usd","diff_at_trade","btc_price","ptb_price",
+            "remaining_sec","fee_usdc","status","result","btc_market_minutes",
+            "simulation","created_at"
+        ])
+        items = []
+        for row in conn.execute(f"SELECT {cols} FROM trades ORDER BY created_at DESC LIMIT ?", (limit,)):
+            try:
+                items.append(_safe_row(row))
+            except Exception:
+                pass  # 跳过坏行
+        return jsonify({"items": items})
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"items": [], "error": str(e)}), 500
+
+
+@app.route("/api/db/check")
+def api_db_check():
+    """数据库完整性检查 & 修复。"""
+    err = _require_pwd()
+    if err:
+        return err
+    conn = _get_conn()
+    result = {}
+    try:
+        rows = conn.execute("PRAGMA integrity_check").fetchall()
+        result["integrity"] = [dict(r) for r in rows]
+    except Exception as e:
+        result["integrity"] = [{"error": str(e)}]
+    try:
+        rows = conn.execute("PRAGMA quick_check").fetchall()
+        result["quick_check"] = [dict(r) for r in rows]
+    except Exception as e:
+        result["quick_check"] = [{"error": str(e)}]
+    # 尝试修复
+    result["repair_attempted"] = False
+    result["repair_result"] = ""
+    if request.args.get("repair") == "1":
+        result["repair_attempted"] = True
+        try:
+            # 尝试 VACUUM 重建数据库
+            conn.execute("VACUUM")
+            conn.commit()
+            result["repair_result"] = "VACUUM completed"
+        except Exception as e:
+            result["repair_result"] = f"VACUUM failed: {e}"
+            # 尝试导出到新库
+            try:
+                import shutil, os
+                src = os.environ.get("DB_PATH", "") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "trading.db")
+                bak = src + ".bak." + str(int(time.time()))
+                shutil.copy2(src, bak)
+                result["repair_result"] += f" | backup saved to {bak}"
+            except Exception as e2:
+                result["repair_result"] += f" | backup failed: {e2}"
+    return jsonify(result)
 
 
 @app.route("/api/db/account")
