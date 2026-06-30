@@ -491,3 +491,25 @@ class Database:
             }
             for t in trades
         ]
+
+    def clear_all_trades(self) -> None:
+        """删除所有交易记录"""
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM trades")
+            conn.commit()
+        logger.info("已清除所有交易记录")
+
+    def clear_all_snapshots(self) -> None:
+        """删除所有快照记录"""
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM account_snapshots")
+            conn.commit()
+        logger.info("已清除所有快照记录")
+
+    def reset_accounts(self, initial_capital: float = 1000.0) -> None:
+        """重置所有账户（实盘和模拟模式）"""
+        # 重置实盘账户
+        self.reset_account(initial_capital, mode="live")
+        # 重置模拟账户
+        self.reset_account(initial_capital, mode="simulation")
+        logger.info(f"已重置所有账户，初始资金: ${initial_capital}")

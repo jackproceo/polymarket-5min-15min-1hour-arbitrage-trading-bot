@@ -501,6 +501,52 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       font-size: 0.9rem;
     }
     
+    .btn-danger {
+      background: var(--danger-gradient);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      transition: var(--transition-fast);
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn-danger::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+    
+    .btn-danger:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+    }
+    
+    .btn-danger:hover::before {
+      left: 100%;
+    }
+    
+    .btn-danger:active {
+      transform: translateY(-1px);
+    }
+    
+    .btn-danger i {
+      font-size: 0.9rem;
+    }
+    
     /* 标签页样式 */
     .tabs {
       display: flex;
@@ -1224,6 +1270,10 @@ _HTML_TABBED = r"""<!DOCTYPE html>
         <i class="fas fa-sync-alt"></i>
         刷新数据
       </button>
+      <button class="btn-danger" onclick="resetData()" style="background: var(--danger-gradient);">
+        <i class="fas fa-trash-alt"></i>
+        清除数据重新开始
+      </button>
     </div>
   </div>
   
@@ -1519,6 +1569,71 @@ _HTML_TABBED = r"""<!DOCTYPE html>
       loadStats();
       var btn=document.querySelector("button[onclick='reloadAll()']");
       if(btn){btn.textContent="✅ 已刷新";btn.style.background="var(--green)";setTimeout(function(){btn.textContent="🔄 重新开始";btn.style.background="var(--blue)";},1500);}
+    }
+
+    function resetData(){
+      if(!confirm("⚠️ 警告：这将清除所有交易数据！\n\n此操作将：\n• 删除所有交易记录\n• 重置账户余额到初始状态\n• 清除所有统计信息\n\n确定要继续吗？")){
+        return;
+      }
+      
+      var btn = document.querySelector("button[onclick='resetData()']");
+      var originalText = btn.textContent;
+      var originalHTML = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 清除中...';
+      btn.disabled = true;
+      
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/reset-data", true);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.onreadystatechange = function(){
+        if(xhr.readyState !== 4) return;
+        
+        setTimeout(function(){
+          if(xhr.status === 200){
+            btn.innerHTML = '<i class="fas fa-check"></i> 数据已清除';
+            btn.style.background = "var(--green)";
+            // 刷新页面数据
+            reloadAll();
+            // 显示成功消息
+            showNotification("✅ 所有数据已成功清除！", "success");
+          }else{
+            btn.innerHTML = '<i class="fas fa-times"></i> 清除失败';
+            btn.style.background = "var(--red)";
+            showNotification("❌ 清除数据失败：" + (xhr.responseText || "未知错误"), "error");
+          }
+          
+          setTimeout(function(){
+            btn.innerHTML = originalHTML;
+            btn.style.background = "";
+            btn.disabled = false;
+          }, 2000);
+        }, 500);
+      };
+      
+      try{
+        xhr.send(JSON.stringify({confirm: true}));
+      }catch(e){
+        btn.innerHTML = originalHTML;
+        btn.style.background = "";
+        btn.disabled = false;
+        showNotification("❌ 网络错误：" + e.message, "error");
+      }
+    }
+
+    /* 显示通知 */
+    function showNotification(message, type){
+      var notification = document.createElement("div");
+      notification.style.cssText = "position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;z-index:10000;color:white;font-weight:600;box-shadow:0 5px 15px rgba(0,0,0,0.2);animation:fadeIn 0.3s ease;";
+      notification.style.background = type === "success" ? "var(--green)" : "var(--red)";
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      setTimeout(function(){
+        notification.style.opacity = "0";
+        notification.style.transition = "opacity 0.3s ease";
+        setTimeout(function(){
+          document.body.removeChild(notification);
+        }, 300);
+      }, 3000);
     }
 
     /* === 仪表盘（每秒刷新）===================== */
@@ -2111,6 +2226,29 @@ def build_app(holder: WebSnapshotHolder, password: str = "", db=None) -> FastAPI
                 "simulation": dict(sim_acc) if sim_acc else None,
             }))
         except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    @app.post("/api/reset-data")
+    async def api_reset_data(request: Request):
+        if not _check_auth(request):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if not db:
+            return JSONResponse({"error": "Database not available"}, status_code=500)
+        
+        try:
+            # 清除所有交易数据
+            db.clear_all_trades()
+            # 清除所有快照记录
+            db.clear_all_snapshots()
+            # 重置所有账户余额到初始状态
+            db.reset_accounts()
+            
+            return JSONResponse({
+                "success": True,
+                "message": "所有交易数据已清除，账户已重置"
+            })
+        except Exception as e:
+            logger.error(f"清除数据失败: {e}")
             return JSONResponse({"error": str(e)}, status_code=500)
 
     return app
