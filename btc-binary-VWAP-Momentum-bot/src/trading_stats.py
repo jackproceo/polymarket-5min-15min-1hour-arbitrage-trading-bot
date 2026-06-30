@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from .core_types import Position, TradeRecord
 from .database import Database
+from .config_loader import StrategyConfig
 
 logger = logging.getLogger("btc_live")
 
@@ -16,14 +17,16 @@ logger = logging.getLogger("btc_live")
 class TradingStats:
     """交易统计与持仓管理"""
 
-    def __init__(self, db: Optional[Database] = None, mode: str = "live"):
+    def __init__(self, db: Optional[Database] = None, mode: str = "live", strategy_config: Optional[StrategyConfig] = None):
         """
         Args:
             db: 数据库实例。如果不提供，使用默认路径创建。
             mode: 'live' 或 'simulation'
+            strategy_config: 策略配置，用于动态止损止盈计算
         """
         self._db = db or Database()
         self._mode = mode
+        self.strategy_config = strategy_config or StrategyConfig()
         self.position: Optional[Position] = None
         self.trades: List[TradeRecord] = []
         self.markets_seen: int = 0
@@ -156,7 +159,28 @@ class TradingStats:
         if not self.position:
             return None
 
-        won = final_price >= 0.70  # 赢的阈值
+        # 动态止损止盈逻辑
+        entry_price = self.position.entry_price
+        
+        if self.strategy_config.dynamic_stop_loss:
+            # 动态阈值：基于入场价格计算止损和止盈
+            stop_loss_price = entry_price * (1 - self.strategy_config.stop_loss_pct / 100)
+            take_profit_price = entry_price * (1 + self.strategy_config.take_profit_pct / 100)
+            
+            # 判断输赢：如果价格低于止损点则输，高于止盈点则赢
+            # 注意：对于"YES"代币，价格上涨是好事；对于"NO"代币，价格下跌是好事
+            # 这里假设我们交易的是"YES"代币（看涨）
+            if final_price <= stop_loss_price:
+                won = False  # 价格低于止损点，亏损
+            elif final_price >= take_profit_price:
+                won = True   # 价格高于止盈点，盈利
+            else:
+                # 价格在止损和止盈之间，使用固定阈值0.70作为回退
+                won = final_price >= 0.70
+        else:
+            # 固定阈值（向后兼容）
+            won = final_price >= 0.70
+        
         entry_cost = self.position.contracts * self.position.entry_price
 
         if won:

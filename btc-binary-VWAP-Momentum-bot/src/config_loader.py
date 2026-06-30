@@ -44,6 +44,10 @@ class StrategyConfig:
     momentum_window_sec: int = 120
     vwap_window_sec: int = 30
     win_rate_csv: str = "data/win_rate.csv"
+    stop_loss_pct: float = 20.0
+    take_profit_pct: float = 30.0
+    dynamic_stop_loss: bool = True
+    min_risk_reward_ratio: float = 2.5
 
 
 @dataclass
@@ -59,6 +63,8 @@ class EntryConfig:
     min_order_usd: float = 1.0
     max_entry_price: float = 0.91
     ws_recovery_timeout_sec: int = 10
+    dynamic_position_sizing: bool = True
+    base_bet_amount: float = 10.0
 
 
 @dataclass
@@ -185,6 +191,10 @@ def load_config(config_path: Optional[str] = None) -> Config:
         momentum_window_sec=strategy_data.get("momentum_window_sec", 120),
         vwap_window_sec=strategy_data.get("vwap_window_sec", 30),
         win_rate_csv=strategy_data.get("win_rate_csv", "data/win_rate.csv"),
+        stop_loss_pct=strategy_data.get("stop_loss_pct", 20.0),
+        take_profit_pct=strategy_data.get("take_profit_pct", 30.0),
+        dynamic_stop_loss=strategy_data.get("dynamic_stop_loss", True),
+        min_risk_reward_ratio=strategy_data.get("min_risk_reward_ratio", 2.5),
     )
     
     # Entry
@@ -200,6 +210,8 @@ def load_config(config_path: Optional[str] = None) -> Config:
         min_order_usd=entry_data.get("min_order_usd", 1.0),
         max_entry_price=entry_data.get("max_entry_price", 0.91),
         ws_recovery_timeout_sec=entry_data.get("ws_recovery_timeout_sec", 10),
+        dynamic_position_sizing=entry_data.get("dynamic_position_sizing", True),
+        base_bet_amount=entry_data.get("base_bet_amount", 10.0),
     )
     
     # Hedge

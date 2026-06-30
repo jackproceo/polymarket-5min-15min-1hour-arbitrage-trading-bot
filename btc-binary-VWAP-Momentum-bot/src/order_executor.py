@@ -63,6 +63,8 @@ class ExecutionConfig:
     min_contracts: int = 5
     min_order_usd: float = 1.0
     max_entry_price: float = 0.91
+    dynamic_position_sizing: bool = True
+    base_bet_amount: float = 10.0
 
 
 class OrderExecutor:
@@ -150,19 +152,33 @@ class OrderExecutor:
             order_logger.error(f"CLOB CLIENT INIT FAILED: {e}")
             return False
     
-    def _calculate_contracts(self, amount_usd: float, price: float) -> int:
+    def _calculate_contracts(self, amount_usd: float, price: float, config: ExecutionConfig) -> int:
         """
         Calculate number of contracts for given amount.
         
         Args:
             amount_usd: Amount in USD to spend
             price: Price per contract
+            config: Execution configuration
         
         Returns:
             Number of contracts (minimum MIN_CONTRACTS)
         """
         if price <= 0:
             return MIN_CONTRACTS
+        
+        # 动态仓位大小调整：价格越低，仓位越大
+        if config.dynamic_position_sizing:
+            # 基于入场价格调整仓位大小
+            # 价格0.80为基准，风险因子 = 1 - price
+            # 0.80 -> 风险因子0.20，仓位大小 = base_bet_amount
+            # 0.75 -> 风险因子0.25，仓位大小 = base_bet_amount * 1.25
+            # 0.85 -> 风险因子0.15，仓位大小 = base_bet_amount * 0.75
+            risk_factor = 1.0 - price  # 价格越低，风险越小
+            adjusted_amount = config.base_bet_amount * (risk_factor / 0.20)  # 以0.80为基准
+            # 限制在0.5倍到2倍之间
+            adjusted_amount = max(config.base_bet_amount * 0.5, min(adjusted_amount, config.base_bet_amount * 2.0))
+            amount_usd = adjusted_amount
         
         contracts = int(amount_usd / price)
         return max(contracts, MIN_CONTRACTS)
@@ -206,7 +222,7 @@ class OrderExecutor:
             )
             return OrderResult(success=False, error="Price exceeded max entry")
 
-        contracts_needed = self._calculate_contracts(config.bet_amount_usd, initial_price)
+        contracts_needed = self._calculate_contracts(config.bet_amount_usd, initial_price, config)
         order_size, _ = self._validate_order_size(contracts_needed, order_price)
         total_cost = order_size * order_price
         oid = f"SIM-{uuid.uuid4().hex[:12]}"
@@ -623,7 +639,7 @@ class OrderExecutor:
             order_logger.error("ENTRY FAILED: Could not get initial price")
             return OrderResult(success=False, error="Could not get price")
         
-        contracts_needed = self._calculate_contracts(config.bet_amount_usd, initial_price)
+        contracts_needed = self._calculate_contracts(config.bet_amount_usd, initial_price, config)
         contracts_bought = 0
         total_cost = 0.0
         attempt = 0

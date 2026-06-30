@@ -122,7 +122,7 @@ class LiveTradingBot:
         mode = "simulation" if sim else "live"
 
         # 创建对应模式的交易统计
-        self.stats = TradingStats(db=self._db, mode=mode)
+        self.stats = TradingStats(db=self._db, mode=mode, strategy_config=self.config.strategy)
 
         # 初始化资金账户
         db_initial_capital = float(os.getenv("INITIAL_CAPITAL", "1000"))

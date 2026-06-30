@@ -815,7 +815,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     .won {
       color: var(--green);
       font-weight: 700;
-      display: inline-flex;
+     
       align-items: center;
       gap: 0.3rem;
     }
@@ -827,7 +827,7 @@ _HTML_TABBED = r"""<!DOCTYPE html>
     .lost {
       color: var(--red);
       font-weight: 700;
-      display: inline-flex;
+      
       align-items: center;
       gap: 0.3rem;
     }

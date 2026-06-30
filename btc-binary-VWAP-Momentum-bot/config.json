@@ -8,7 +8,7 @@
 
   "strategy": {
     "min_price": 0.75,
-    "max_price": 0.88,
+    "max_price": 0.86,
     "_comment_5m": "Below min_elapsed / no_entry_cutoff are scaled for 5m (300s). For 15m, raise e.g. min_elapsed_sec 530, no_entry_before_end_sec 335.",
     "min_elapsed_sec": 180,
     "min_deviation_pct": 3,
@@ -16,7 +16,11 @@
     "no_entry_before_end_sec": 110,
     "momentum_window_sec": 60,
     "vwap_window_sec": 30,
-    "win_rate_csv": "data/win_rate.csv"
+    "win_rate_csv": "data/win_rate.csv",
+    "stop_loss_pct": 15,
+    "take_profit_pct": 25,
+    "dynamic_stop_loss": true,
+    "min_risk_reward_ratio": 2.5
   },
 
   "entry": {
@@ -28,8 +32,10 @@
     "fill_timeout_ms": 1000,
     "min_contracts": 5,
     "min_order_usd": 1,
-    "max_entry_price": 0.88,
-    "ws_recovery_timeout_sec": 10
+    "max_entry_price": 0.86,
+    "ws_recovery_timeout_sec": 10,
+    "dynamic_position_sizing": true,
+    "base_bet_amount": 10.0
   },
 
   "hedge": {
